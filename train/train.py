@@ -82,7 +82,3 @@ class Learner(object):
 				i -= 1
 			indexset.update({self.learners.index(l) : x})
 		return indexset
-
-
-
-
