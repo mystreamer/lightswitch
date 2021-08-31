@@ -1,12 +1,24 @@
+import re
+import ast
 import click
 import umap as mp
 import hdbscan as hdb
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import MultiLabelBinarizer
 from encoder.encoder import SBERTEncoder
 from utils.utils import CTFIDFVectorizer
 from viewbuilder.viewbuilder import ViewBuilder as vb
 from train.train import Learner
+
+
+class PythonLiteralOption(click.Option):
+	def type_cast_value(self, ctx, value):
+		try:
+			return ast.literal_eval(value)
+		except Exception as e:
+			raise click.BadParameter(value)
+
 
 class ArgHolder(object):
 	pass
@@ -25,7 +37,7 @@ def utils(ctx, newview, feature, viewname):
 	""" Perform a utility on a feature column to generate new features
 
 	FEATURE : The name of the column the util will be performed on.
-	
+
 	VIEWNAME : The name of the view which is used.
 	"""
 	# persist common attributes to click
@@ -57,6 +69,7 @@ def umap(ctx):
 	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
 	vb(newview if newview else viewname).save(data)
 
+
 def ctfidf(ctx):
 	pass
 
@@ -78,6 +91,7 @@ def encoder(ctx, newview, filepath, textcol, viewname):
 	"""
 	ctx.obj = (newview, filepath, textcol, viewname)
 
+
 @encoder.command()
 @click.option("--modelname", default=None, help="SBERT model to be used")
 @click.option("--clip", default=None, help="Optional clipping parameter")
@@ -96,20 +110,68 @@ def sbert(ctx, modelname, clip):
 # TODO: specify featureset (columns)
 # TODO: specify label (if new, add new... if old, specify a NULL value)
 @click.command()
-@click.option("--annotatorfile", default="labels1.csv", "Choose the file which will query you for annotation")
+@click.option("--annotatorfile", default="oracle.csv", help="Choose the file which will query you for annotation")
 # @click.option("--newlabelcolumn")
 # @click.option("--criticalvalue", default=-1, )
+@click.option("--nsuggest", default=5)
+@click.option("--learnername", default="mylearner")
+@click.option("--multilabel", default=True)
 @click.argument("features")
 @click.argument("label")
-def train():
+@click.argument("viewname")
+def train(annotatorfile, nsuggest, learnername, multilabel, features, label, viewname):
 	""" Initiate a training process on a chosen view.
 
 	FEATURES: comma separated feature names / columns of the views (will be combined)
 
 	LABEL: the label the model will be trained on
 	"""
+	dc = vb(viewname).load()
 
-	pass
+	feature_cols = list([f.strip() for f in features.split(",")])
+
+	dc["dim"] = vb.unstringify(dc["dim"])
+
+	dc["feature_combination"] = vb.combine(*(dc[f] for f in feature_cols))
+
+	X = {}
+
+	mapper_unl, unlabelled = vb.filter(dc, lambda x: x[label] is None)
+
+	X["unlabelled"] = unlabelled["feature_combination"]
+
+	mapper_l, labelled = vb.filter(dc, lambda x: x[label] is not None)
+
+	X["train"] = labelled["feature_combination"]
+
+	print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
+
+	MLB = MultiLabelBinarizer()
+
+	MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
+
+	y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", e.lower()))) for e in labelled[label]]))
+
+	learner = Learner(learner_name=learnername, n_suggest=nsuggest, X=X, y=y, multilabel=multilabel)
+
+	predicts, _ = learner.get_predicts()
+
+	for c in MLB.classes_.tolist():
+		dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
+
+	for c, col_l, col_unl in zip(MLB.classes_.tolist(), np.array(y).T, np.array(predicts).T):
+		for i, x in enumerate(col_l.tolist()):
+			dc[c][mapper_l[i]] = x
+		for i, x in enumerate(col_unl.tolist()):
+			dc[c][mapper_unl[i]] = x
+
+	dc["dim"] = vb.stringify(dc["dim"])
+	dc.pop("feature_combination")
+
+	vb(f"{viewname}_classified").save(dc)
+	# qs = learner.get_queryset()
+
+
 
 # multilabel vs. multiclass
 @click.group()

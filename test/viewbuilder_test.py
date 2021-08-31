@@ -39,6 +39,7 @@ class ViewBuilderTest(unittest.TestCase):
 		dict_b = {'x': ["A", "B", "C"], 'y': [1,2,3]}
 		ret = vb.join_on(dict_a, dict_b, "x", join_type="outer")
 		assert ret == {'x': ["A", "A", "C", "B"], 'y': [1,1,3,2], 'z':[9,4,2,None]}
+		# assert ret["z"][ret["x"].index("B")] == None
 
 	def test_filter_select(self):
 		dict_a = {'x': ["A", "A", "C"], 'z': [9,4,2]}

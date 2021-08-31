@@ -30,14 +30,22 @@ class CTFIDFVectorizer(TfidfTransformer):
 
 
 class Translator(object):
+    """ Translate any strings given a source and target language using the DeepL API """
     api_root = "https://api-free.deepl.com/v2/translate"
 
     def __init__(self, auth_key, source_lang, target_lang):
+        """ Initialize the Translator object.
+        Takes:
+        auth_key: The API authentication key for requests to the DeepL API
+        source_lang: Abbreviation of the source language, e.g. "DE"
+        target_lang: Abbreviation of the target language, e.g. "EN"
+        """
         self.auth_key = auth_key
         self.source_lang = source_lang
         self.target_lang = target_lang
 
     def translate_text(self, text):
+        """ Pass a string to this function which is to be translated """
         params = {
             "auth_key": self.auth_key,
             "source_lang": self.source_lang,

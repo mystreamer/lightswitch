@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import json
 
@@ -6,10 +7,11 @@ class ViewBuilder(object):
 	def __init__(self, viewname: str):
 		self.viewname = viewname
 
-	def load(self, filepath=None, clip=None):
+	def load(self, filepath=None, clip=None, index_col=0):
 		# TODO: ensure type consistency
-		df = pd.read_csv("views/" + self.viewname + ".csv" if not filepath else filepath, index_col=0)
+		df = pd.read_csv("views/" + self.viewname + ".csv" if not filepath else filepath, index_col=index_col)
 		df = df[:clip]
+		df = df.replace({np.nan: None})
 		return df.to_dict(orient='list')
 	
 	def save(self, dc, filepath=None):
@@ -44,7 +46,8 @@ class ViewBuilder(object):
 		df_a = pd.DataFrame.from_dict(dc_a)
 		df_b = pd.DataFrame.from_dict(dc_b)
 		merged = pd.merge(df_a, df_b, how=join_type, on=label)
-		return merged.where(pd.notnull(merged), default).to_dict(orient='list')
+		merged = merged.replace({np.nan: None})
+		return merged.to_dict(orient='list')
 
 	@staticmethod
 	def stringify(elements: list):
