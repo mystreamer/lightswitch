@@ -50,23 +50,35 @@ def utils(ctx, newview, feature, viewname):
 def hdbscan(ctx, includep):
 	""" Perform hdbscan on a desired text-vector representation """
 	newview, feature, viewname = ctx.obj
+
 	data = vb(viewname).load()
+
 	data[feature] = vb.unstringify(data[feature])
+
 	clustered = hdb.HDBSCAN(min_cluster_size=15, prediction_data=True, min_samples=6).fit(data[feature])
+
 	data['hdbscan'] = clustered.labels_
+
 	if includep:
 		data['hdbscan_p'] = clustered.probabilities_
+
 	vb(newview if newview else viewname).save(data)
+
 
 @utils.command()
 @click.pass_context
 def umap(ctx):
 	""" Perform umap on a desired text-vector representation """
 	newview, feature, viewname = ctx.obj
+
 	data = vb(viewname).load()
+
 	data[feature] = vb.unstringify(data[feature])
+
 	reduced = mp.UMAP(n_components=10, n_neighbors=18, random_state=42)
+
 	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
+
 	vb(newview if newview else viewname).save(data)
 
 
@@ -98,12 +110,18 @@ def encoder(ctx, newview, filepath, textcol, viewname):
 @click.pass_context
 def sbert(ctx, modelname, clip):
 	newview, filepath, textcol, viewname = ctx.obj
+
 	if not newview and clip:
 		click.confirm('Clip is active, without a new viewname. This may overwrite your current view. Continue?', abort=True)
+
 	data = vb(viewname).load(filepath, clip=int(clip))
+
 	enc = SBERTEncoder('T-Systems-onsite/cross-en-de-roberta-sentence-transformer' if not modelname else modelname)
+
 	embeds = enc.encode(data[textcol])
+
 	data['sbert'] = vb.stringify(map(lambda x: x.tolist(), embeds))
+
 	vb(newview if newview else viewname).save(data)
 
 # multilabel vs. multiclass
@@ -115,7 +133,7 @@ def sbert(ctx, modelname, clip):
 # @click.option("--criticalvalue", default=-1, )
 @click.option("--nsuggest", default=5)
 @click.option("--learnername", default="mylearner")
-@click.option("--multilabel", default=True)
+@click.option("--multilabel", is_flag=True, default=False)
 @click.argument("features")
 @click.argument("label")
 @click.argument("viewname")
@@ -132,6 +150,8 @@ def train(annotatorfile, nsuggest, learnername, multilabel, features, label, vie
 
 	dc["dim"] = vb.unstringify(dc["dim"])
 
+	dc["reduced_dim"] = vb.unstringify(dc["reduced_dim"])
+
 	dc["feature_combination"] = vb.combine(*(dc[f] for f in feature_cols))
 
 	X = {}
@@ -144,17 +164,35 @@ def train(annotatorfile, nsuggest, learnername, multilabel, features, label, vie
 
 	X["train"] = labelled["feature_combination"]
 
-	print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
-
 	MLB = MultiLabelBinarizer()
 
-	MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
-
-	y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", e.lower()))) for e in labelled[label]]))
+	if multilabel:
+		print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
+		MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
+		y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", e.lower()))) for e in labelled[label]]))
+	else:
+		print([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", l.lower())[0]]]))])
+		MLB.fit([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", l.lower())[0]]]))])
+		y = MLB.transform(list([list(map(lambda x: x.strip(), [re.split("[,;]", e.lower())[0]])) for e in labelled[label]]))
 
 	learner = Learner(learner_name=learnername, n_suggest=nsuggest, X=X, y=y, multilabel=multilabel)
 
-	predicts, _ = learner.get_predicts()
+	predicts, probas = learner.get_predicts()
+
+	rand_encounters = 0
+
+	# TODO: Wrap in function (dangerous var leak)
+	for i, x, z in zip(range(0, len(predicts)), predicts, probas):
+		if np.sum(x) == 0:
+			if np.sum(z) != 0:
+				x[np.argmax(z)] = 1
+				predicts[i] = x
+			else:
+				rand_encounters += 1
+				x[np.random.choice(range(0, len(x)))] = 1
+				predicts[i] = x
+
+	print(f"Experienced {rand_encounters} random encounters.")
 
 	for c in MLB.classes_.tolist():
 		dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
@@ -166,6 +204,9 @@ def train(annotatorfile, nsuggest, learnername, multilabel, features, label, vie
 			dc[c][mapper_unl[i]] = x
 
 	dc["dim"] = vb.stringify(dc["dim"])
+
+	dc["reduced_dim"] = vb.stringify(dc["reduced_dim"])
+
 	dc.pop("feature_combination")
 
 	vb(f"{viewname}_classified").save(dc)

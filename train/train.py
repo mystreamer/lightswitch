@@ -38,9 +38,9 @@ class Learner(object):
 		else:
 			if self.multilabel:
 				# self.clf = ClassifierChain(SVC(probability=True))
-				self.clf = MultiOutputClassifier(SVC(probability=True))
+				self.clf = MultiOutputClassifier(SVC(probability=True), n_jobs=-1)
 			else:
-				self.clf = OneVsRestClassifier(SVC(probability=True))
+				self.clf = OneVsRestClassifier(SVC(probability=True), n_jobs=-1)
 
 		# initialize learners
 		self.learners.append(
@@ -78,8 +78,9 @@ class Learner(object):
 		""" Get predictions from the inread unlabelled samples, returned in-sequence to the supplies unlabelled samples """
 		predicts = np.array(self.learners[0].predict(self.X["unlabelled"])).tolist()
 		# TODO: Resolve
+		probas = np.array(self.learners[0].predict_proba(self.X["unlabelled"])).tolist()
 		# probas = np.array(self.learners[0].predict_proba(self.X["unlabelled"])).tolist() if not self.multilabel else np.array(self.learners[0].predict_proba(self.X["unlabelled"])).tolist()
-		probas = None
+		# probas = None
 
 		return predicts, probas
 

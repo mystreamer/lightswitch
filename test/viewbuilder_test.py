@@ -54,4 +54,7 @@ class ViewBuilderTest(unittest.TestCase):
 		r2 = vb.combine(y, z)
 		assert r1 == [[1,2,1], [1,3,2]] and r2 == [[1,3], [2,4]]
 
-
+	def test_combine_single_attribute(self):
+		x = [[1, 2], [1,3]]
+		r1 = vb.combine(x)
+		assert r1 == [[1, 2], [1,3]]
