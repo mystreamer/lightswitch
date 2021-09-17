@@ -1,0 +1,116 @@
+{
+"corpus" : {
+	"$jsonSchema": {
+		"bsonType": "object",
+		"required": [
+			"corpusName",
+			"text"
+		],
+		"properties": {
+			"corpusName": {
+				"bsonType": "string",
+				"description": "The corpus the text item belongs to."
+			},
+			"text": {
+				"bsonType": "string",
+				"description": "Some sort of text for analysis to be performed on."
+			},
+			"source": {
+				"bsonType": "string",
+				"description": "A categorical variable indicating the source of an item."
+			},
+			"date": {
+				"bsonType": "date",
+				"description": "A date that is related to the data item."
+			}
+		}
+	}
+}, 
+"clusters": {
+	"$jsonSchema": {
+		"bsonType": "object",
+		"required": [
+			"corpusName",
+			"clusterNo",
+			"clusteringName"
+		],
+		"properties": {
+			"corpusName": {
+				"bsonType": "string",
+				"description": "The name of the corpus the clustering was prepared on."
+			},
+			"clusterNo": {
+				"bsonType": "int",
+				"description": "An integer that is unique for that document within its clusteringName."
+			},
+			"childClusterings": {
+				"bsonType": "array",
+				"items": {
+					"anyOf": [
+						{
+							"bsonType": "string"
+						}
+					]
+				},
+				"description": "The names of the child clusterings."
+			},
+			"childItems": {
+				"bsonType": "array",
+				"items": {
+					"anyOf": [
+						{
+							"bsonType": "objectId"
+						}
+					]
+				},
+				"description": "Concrete items belonging to the cluster within the corpus collection."
+			},
+			"annotations": {
+				"bsonType": "array",
+				"items": {
+					"anyOf": [
+						{
+							"bsonType": "objectId"
+						}
+					]
+				},
+				"description": "An array linking to objects within the codes collection."
+			}
+		}
+	}
+},
+"codes": { 
+	"$jsonSchema": {
+		"bsonType": "object",
+		"required": [
+		  "codeSet",
+		  "codeName"
+		],
+		"properties": {
+		  "codeSet": {
+			"bsonType": "string",
+			"description": "The name of the set the code finds itself in."
+		  },
+		  "codeName": {
+			"bsonType": "string",
+			"description": "How the code will appear textually."
+		  },
+		  "children": {
+			"bsonType": "array",
+			"items": {
+			  "anyOf": [
+				{
+				  "bsonType": "objectId"
+				}
+			  ]
+			},
+			"description": "The Ids pointing to the child codes (in case of hierarchical)"
+		  },
+		  "codeDesc": {
+			"bsonType": "string",
+			"description": "A brief description of what the code is about."
+		  }
+		}
+	  }
+}
+}

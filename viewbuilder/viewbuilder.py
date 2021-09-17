@@ -12,6 +12,7 @@ class ViewBuilder(object):
 		df = pd.read_csv("views/" + self.viewname + ".csv" if not filepath else filepath, index_col=index_col)
 		df = df[:clip]
 		df = df.replace({np.nan: None})
+		df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 		return df.to_dict(orient='list')
 	
 	def save(self, dc, filepath=None):
@@ -50,6 +51,10 @@ class ViewBuilder(object):
 		return merged.to_dict(orient='list')
 
 	@staticmethod
+	def change_orientation(data, to: str = "list"):
+		return pd.DataFrame(data).to_dict(orient=to)
+
+	@staticmethod
 	def stringify(elements: list):
 		""" Serializes a list objects and make them CSV compatible """
 		return list(map(json.dumps, elements))
@@ -65,6 +70,19 @@ class ViewBuilder(object):
 		tpl = pd.DataFrame.from_dict(dc)
 		tpl = tpl.groupby([label_col], as_index=False).agg({text_col: ' '.join})
 		return tpl.to_dict(orient='list')
+
+	@staticmethod
+	def aggregate_text_on_columns(dc, cols: list, delim=""):
+		""" Combine different text cols into one """
+		df = pd.DataFrame.from_dict(dc)
+		df["ret"] = df[cols].apply(lambda row: delim.join(row.values.astype(str)), axis=1)
+		return df["ret"].tolist()
+
+	@staticmethod
+	def size_of_groups(dc, on):
+		""" Get the size of different groups """
+		df = pd.DataFrame.from_dict(dc)
+		return df.groupby(on).size().reset_index(name="count").to_dict(orient='list')
 
 	@staticmethod
 	def combine(*args):

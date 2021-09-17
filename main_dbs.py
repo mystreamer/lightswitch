@@ -5,8 +5,8 @@ import umap as mp
 import hdbscan as hdb
 import numpy as np
 import pandas as pd
-from utils.utils import KWIC
 from train.train import Learner
+from db.db_manager import DBManager
 from encoder.encoder import SBERTEncoder
 from utils.utils import CTFIDFVectorizer
 from viewbuilder.viewbuilder import ViewBuilder as vb
@@ -28,157 +28,14 @@ class ArgHolder(object):
 def entrypoint():
 	pass
 
-# extracts from existing view
-@click.group()
-@click.argument("viewname")
-@click.argument("newview")
-@click.pass_context
-def extract(ctx, viewname, newview):
-	""" Extract text from an existing corpus
-
-	VIEWNAME : The name of the view which is used.
-
-	NEWVIEW : The name of the view which will be generated from the extract
-
-	"""
-	# persist common attributes to click
-	ctx.obj = (viewname, newview)
-
-@extract.command()
-@click.option("--nooverlap", is_flag=True, default=False, help="Kwics will not overlap in their contexts, the first match only will count.")
-@click.option("--keepdata", is_flag=True, default=True, help="Whether the kwics will be joined with all previous data.")
-@click.option("--masterexpr", default=None, help="An optional master regex, where the keywords will be interpolated in, with <KEYWORD>")
-@click.argument("keywords")
-@click.argument("cols")
-# TODO: add a window size argument
-@click.pass_context
-def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
-	""" Generates a set of matching keywords with surrounding contexts
-
-	KEYWORDS: Filepath to a file of keywords (can be a list of regex expressions)
-
-	COLS: If multiple columns are presented (comma separated in ""), they will be combined into a single text_dump
-
-	"""
-	viewname, newview = ctx.obj
-
-	data = vb(viewname).load()
-
-	data.update({"id": list(range(0, len(data[list(data.keys())[0]])))})
-
-	keywords = KWIC().get_keywords(keywords)
-
-	cols = list([f.strip() for f in cols.split(",")])
-
-	if len(cols) > 1:
-		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
-		cols = ["combined_text"]
-
-	if masterexpr:
-		compiled_contexts = [(re.compile(r'%s' % (masterexpr.replace("<KEYWORD>", kw)), flags=re.IGNORECASE), kw) for kw in keywords]
-	else:
-		compiled_contexts = [(re.compile(r'%s' % (kw), flags=re.IGNORECASE), kw) for kw in keywords]
-
-	matches = []
-
-	for id, text in enumerate(data[cols[0]]):
-		matches += [{"match": list(re.finditer(expr[0], text)), "keyword": expr[1], "id": id} for expr in compiled_contexts]
-
-	# print(matches)
-
-	matches = list(filter(lambda x: x["match"] if x["match"] != [] else False, matches))
-
-	DS = {"id": [], "context": [], "keyword": []}
-
-	non_overlapping_set = set()
-
-	data["sent_ranges"] = KWIC().generate_sent_ranges(data, text_col=cols[0])
-
-	for match in matches:
-		lst = []
-		match["match"] = [(m.start(), m.end()) for m in match["match"]]
-		for m in match["match"]:
-			try:
-				i = KWIC.get_index_of_range_list(data["sent_ranges"][match["id"]], m[0])
-
-				if nooverlap:
-					if any([x in non_overlapping_set for x in [(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)]]):
-						continue
-					else:
-						non_overlapping_set = non_overlapping_set.union({(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)})
-
-				# TODO: Add window size variable
-				l_sent_start, l_sent_end = data["sent_ranges"][match["id"]][max(i - 1, 0)] if (i != 0) else (0, 0)
-				m_sent_start, m_sent_end = data["sent_ranges"][match["id"]][i]
-				r_sent_start, r_sent_end = data["sent_ranges"][match["id"]][i + 1:i + 2][0] if (data["sent_ranges"][match["id"]][i + 1:i + 2] != []) else (0, 0)
-				DS["context"].append(f'{data[cols[0]][match["id"]][l_sent_start:l_sent_end]} {data[cols[0]][match["id"]][m_sent_start:m_sent_end]} {data[cols[0]][match["id"]][r_sent_start:r_sent_end]}')
-				# if corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == "" or corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == " ":
-				# 	print(corpus_dict["article_text"][match["id"]][m[0]: m[1]].upper())
-				# 	print("____________")
-				# 	print(corpus_dict["article_text"][match["id"]])
-			except TypeError as e:
-				DS["context"].append("n.A.")
-			DS["id"].append(match["id"])
-			DS["keyword"].append(match["keyword"])
-
-		match.update({"kwic": lst})
-
-	if keepdata:
-		joined_res = vb.join_on(data, DS, "id")
-		joined_res["parent_id"] = joined_res.pop("id")
-		vb(newview).save(joined_res)
-	else:
-		DS["parent_id"] = DS.pop("id")
-		vb(newview).save(DS)
-
-@extract.command()
-@click.pass_context
-def ctfidf(ctx):
-	viewname, newview = ctx.obj
-	pass
-
-@extract.command()
-@click.argument("lbd")
-@click.pass_context
-def filterby(ctx, lbd):
-	viewname, newview = ctx.obj
-
-	lbd = eval(lbd)
-
-	assert callable(lbd) and lbd.__name__ == "<lambda>"
-
-	data = vb(viewname).load()
-
-	_, filtered = vb.filter(data, lbd)
-
-	vb(newview).save(filtered)
-
-@extract.command()
-@click.argument("cols")
-@click.pass_context
-def groupbycount(ctx, cols):
-	viewname, newview = ctx.obj
-
-	cols = list([f.strip() for f in cols.split(",")])
-
-	data = vb(viewname).load()
-
-	counts = vb.size_of_groups(data, cols)
-
-	vb(newview).save(counts)
-
-
-@extract.command()
-@click.pass_context
-def matchcounter(ctx):
-	pass
-
-
 # insights from text
 @click.group()
 @click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
 @click.argument("feature")
 @click.argument("viewname")
+# ADD ARGUMENTS: "corpus_name"
+# ADD OPTIONS "--overwrite", in case attributes exist.
+# REMOVE NEWVIEW, VIEWNAME
 @click.pass_context
 def utils(ctx, newview, feature, viewname):
 	""" Perform a utility on a feature column to generate new features
@@ -209,14 +66,6 @@ def hdbscan(ctx, includep):
 	if includep:
 		data['hdbscan_p'] = clustered.probabilities_
 
-	print(f"In total {len(clustered.labels_)} clusters have been generated.")
-
-	sog = vb.size_of_groups(data, on="hdbscan")
-
-	print("clusterID\tcount")
-	for x, y in zip(sog["hdbscan"], sog["count"]):
-		print(f"{str(x)}\t{str(y)}")
-
 	vb(newview if newview else viewname).save(data)
 
 
@@ -236,6 +85,10 @@ def umap(ctx):
 
 	vb(newview if newview else viewname).save(data)
 
+
+def ctfidf(ctx):
+	pass
+
 # encode text into vector representations
 @click.group()
 @click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
@@ -243,6 +96,9 @@ def umap(ctx):
 @click.argument("textcol")
 @click.argument("viewname")
 @click.pass_context
+# ADD ARGUMENTS: "corpus_name"
+# ADD OPTIONS "--overwrite", in case attributes exist.
+# REMOVE NEWVIEW, VIEWNAME
 def encoder(ctx, newview, filepath, textcol, viewname):
 	""" Encoders for encoding natural language text into vector-representation
 
@@ -279,7 +135,6 @@ def sbert(ctx, modelname, clip):
 # TODO: specify featureset (columns)
 # TODO: specify label (if new, add new... if old, specify a NULL value)
 @click.command()
-@click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
 @click.option("--annotatorfile", default="oracle.csv", help="Choose the file which will query you for annotation")
 # @click.option("--newlabelcolumn")
 # @click.option("--criticalvalue", default=-1, )
@@ -289,7 +144,7 @@ def sbert(ctx, modelname, clip):
 @click.argument("features")
 @click.argument("label")
 @click.argument("viewname")
-def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, label, viewname):
+def train(annotatorfile, nsuggest, learnername, multilabel, features, label, viewname):
 	""" Initiate a training process on a chosen view.
 
 	FEATURES: comma separated feature names / columns of the views (will be combined)
@@ -300,9 +155,9 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, l
 
 	feature_cols = list([f.strip() for f in features.split(",")])
 
-	dc["sbert"] = vb.unstringify(dc["sbert"])
+	dc["dim"] = vb.unstringify(dc["dim"])
 
-	dc["umap"] = vb.unstringify(dc["umap"])
+	dc["reduced_dim"] = vb.unstringify(dc["reduced_dim"])
 
 	dc["feature_combination"] = vb.combine(*(dc[f] for f in feature_cols))
 
@@ -356,13 +211,13 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, l
 		for i, x in enumerate(col_unl.tolist()):
 			dc[c][mapper_unl[i]] = x
 
-	dc["sbert"] = vb.stringify(dc["sbert"])
+	dc["dim"] = vb.stringify(dc["dim"])
 
-	dc["umap"] = vb.stringify(dc["umap"])
+	dc["reduced_dim"] = vb.stringify(dc["reduced_dim"])
 
 	dc.pop("feature_combination")
 
-	vb(newview if newview else viewname).save(data)
+	vb(f"{viewname}_classified").save(dc)
 	# qs = learner.get_queryset()
 
 
@@ -379,7 +234,6 @@ def validate():
 	pass
 
 # add different sub entrypoints
-entrypoint.add_command(extract)
 entrypoint.add_command(utils)
 entrypoint.add_command(encoder)
 entrypoint.add_command(train)

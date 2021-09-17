@@ -4,6 +4,7 @@ import requests
 import numpy as np
 import scipy.sparse as sp
 from sklearn.preprocessing import normalize
+from nltk.tokenize.punkt import PunktSentenceTokenizer
 from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
 
 
@@ -61,3 +62,34 @@ class Translator(object):
         # TODO: Cases for multiple translations, if even possible by the API.
 
         return res.json()["translations"][0]["text"]
+
+class KWIC(object):
+    def __init__(self):
+        pass
+
+    def generate_sent_ranges(self, dc: dict, text_col: str):
+        return list(map(self.__text_to_sent_range, dc[text_col]))
+
+    def __text_to_sent_range(self, text):
+        ranges = []
+        for start, end in PunktSentenceTokenizer().span_tokenize(text):
+            ranges.append((start, end))
+        return ranges
+
+    @staticmethod
+    def get_index_of_range_list(range_list, x):
+        i = 0
+        for r in range_list:
+            if x in range(*r):
+                return i
+            i += 1
+        return -1
+
+    @staticmethod
+    def get_keywords(filepath):
+        with open(filepath, "r+", encoding="UTF-8") as f:
+            keywords = []
+            for line in f.readlines():
+                keywords.append(line.replace("\n", "").strip())
+            return keywords
+
