@@ -3,9 +3,10 @@ import ast
 import copy
 import click
 import umap as mp
-import hdbscan as hdb
 import numpy as np
 import pandas as pd
+import hdbscan as hdb
+from tqdm import tqdm
 from train.train import Learner
 from encoder.encoder import SBERTEncoder
 from viewbuilder.viewbuilder import ViewBuilder as vb
@@ -69,6 +70,13 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 
 	keywords = KWIC().get_keywords(keywords)
 
+	# pre_validate
+	for regex in keywords:
+		try:
+			re.findall(re.compile(regex), "some stringg")
+		except Exception as e:
+			raise Exception(f"failed at regex {regex}")
+
 	cols = list([f.strip() for f in cols.split(",")])
 
 	if len(cols) > 1:
@@ -95,34 +103,35 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 
 	data["sent_ranges"] = KWIC().generate_sent_ranges(data, text_col=cols[0])
 
-	for match in matches:
-		lst = []
-		match["match"] = [(m.start(), m.end()) for m in match["match"]]
-		for m in match["match"]:
-			try:
-				i = KWIC.get_index_of_range_list(data["sent_ranges"][match["id"]], m[0])
+	with tqdm(total=len(matches), leave=True, position=0):
+		for match in tqdm(matches, position=0, leave=True):
+			lst = []
+			match["match"] = [(m.start(), m.end()) for m in match["match"]]
+			for m in match["match"]:
+				try:
+					i = KWIC.get_index_of_range_list(data["sent_ranges"][match["id"]], m[0])
 
-				if nooverlap:
-					if any([x in non_overlapping_set for x in [(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)]]):
-						continue
-					else:
-						non_overlapping_set = non_overlapping_set.union({(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)})
+					if nooverlap:
+						if any([x in non_overlapping_set for x in [(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)]]):
+							continue
+						else:
+							non_overlapping_set = non_overlapping_set.union({(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)})
 
-				# TODO: Add window size variable
-				l_sent_start, l_sent_end = data["sent_ranges"][match["id"]][max(i - 1, 0)] if (i != 0) else (0, 0)
-				m_sent_start, m_sent_end = data["sent_ranges"][match["id"]][i]
-				r_sent_start, r_sent_end = data["sent_ranges"][match["id"]][i + 1:i + 2][0] if (data["sent_ranges"][match["id"]][i + 1:i + 2] != []) else (0, 0)
-				DS["context"].append(f'{data[cols[0]][match["id"]][l_sent_start:l_sent_end]} {data[cols[0]][match["id"]][m_sent_start:m_sent_end]} {data[cols[0]][match["id"]][r_sent_start:r_sent_end]}')
-				# if corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == "" or corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == " ":
-				# 	print(corpus_dict["article_text"][match["id"]][m[0]: m[1]].upper())
-				# 	print("____________")
-				# 	print(corpus_dict["article_text"][match["id"]])
-			except TypeError as e:
-				DS["context"].append("n.A.")
-			DS["id"].append(match["id"])
-			DS["keyword"].append(match["keyword"])
+					# TODO: Add window size variable
+					l_sent_start, l_sent_end = data["sent_ranges"][match["id"]][max(i - 1, 0)] if (i != 0) else (0, 0)
+					m_sent_start, m_sent_end = data["sent_ranges"][match["id"]][i]
+					r_sent_start, r_sent_end = data["sent_ranges"][match["id"]][i + 1:i + 2][0] if (data["sent_ranges"][match["id"]][i + 1:i + 2] != []) else (0, 0)
+					DS["context"].append(f'{data[cols[0]][match["id"]][l_sent_start:l_sent_end]} {data[cols[0]][match["id"]][m_sent_start:m_sent_end]} {data[cols[0]][match["id"]][r_sent_start:r_sent_end]}')
+					# if corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == "" or corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == " ":
+					# 	print(corpus_dict["article_text"][match["id"]][m[0]: m[1]].upper())
+					# 	print("____________")
+					# 	print(corpus_dict["article_text"][match["id"]])
+				except TypeError as e:
+					DS["context"].append("n.A.")
+				DS["id"].append(match["id"])
+				DS["keyword"].append(match["keyword"])
 
-		match.update({"kwic": lst})
+			match.update({"kwic": lst})
 
 	if keepdata:
 		joined_res = vb.join_on(data, DS, "id")
@@ -263,9 +272,12 @@ def matchcounter(ctx, cscol, nestedcolorder, regexcol, keywordsfile):
 
 	nest = mc.nestify(keywords, nestedcolorder, inner_cols=["regex", "case-sensitive"])
 
-	prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text) for text in data[feature]])
+	with tqdm(total=len(data[feature]), leave=True, position=0):
+		prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text) for text in tqdm(data[feature], position=0, leave=True)])
 
-	match_records = list([mc.flatten_by(ds, "sum") for ds in prepared_ds])
+	print("Flattening:")
+	with tqdm(total=len(prepared_ds), leave=True, position=0):
+		match_records = list([mc.flatten_by(ds, "sum") for ds in tqdm(prepared_ds, position=0, leave=True)])
 
 	tbl = pd.DataFrame.from_dict(match_records).to_dict(orient="list")
 
