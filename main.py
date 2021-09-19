@@ -1,16 +1,16 @@
 import re
 import ast
+import copy
 import click
 import umap as mp
 import hdbscan as hdb
 import numpy as np
 import pandas as pd
-from utils.utils import KWIC
 from train.train import Learner
 from encoder.encoder import SBERTEncoder
-from utils.utils import CTFIDFVectorizer
 from viewbuilder.viewbuilder import ViewBuilder as vb
 from sklearn.preprocessing import MultiLabelBinarizer
+from utils.utils import KWIC, CTFIDFVectorizer, MatchCounter
 
 
 class PythonLiteralOption(click.Option):
@@ -27,6 +27,7 @@ class ArgHolder(object):
 @click.group()
 def entrypoint():
 	pass
+
 
 # extracts from existing view
 @click.group()
@@ -132,10 +133,45 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 		vb(newview).save(DS)
 
 @extract.command()
+@click.option("--ranks", default=20, help="How many ranks should be generated?")
+@click.option("--lang", default="german", help="Language to use for stopword removal")
+@click.argument("groupby")
+@click.argument("cols")
 @click.pass_context
-def ctfidf(ctx):
+def ctfidf(ctx, ranks, lang, groupby, cols):
 	viewname, newview = ctx.obj
-	pass
+
+	data = vb(viewname).load()
+
+	cols = list([f.strip() for f in cols.split(",")])
+
+	if len(cols) > 1:
+		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
+		cols = ["combined_text"]
+
+	records = CTFIDFVectorizer().get_most_prominent_words(data, groupby, cols[0], ranks, lang)
+
+	vb(newview).save(records)
+
+@extract.command()
+@click.option("--lang", default="de", help="Language to use for stopword removal")
+@click.argument("groupby")
+@click.argument("cols")
+@click.pass_context
+def similarity(ctx, lang, groupby, cols):
+	viewname, newview = ctx.obj
+	
+	data = vb(viewname).load()
+
+	cols = list([f.strip() for f in cols.split(",")])
+
+	if len(cols) > 1:
+		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
+		cols = ["combined_text"]
+
+	records = CTFIDFVectorizer().get_similarity_matrix(data, groupby, cols[0], lang)
+
+	vb(newview).save(records)
 
 @extract.command()
 @click.argument("lbd")
@@ -154,9 +190,10 @@ def filterby(ctx, lbd):
 	vb(newview).save(filtered)
 
 @extract.command()
+@click.option("--printoutput", is_flag=True, default=False, help="Whether to print the output of the count.")
 @click.argument("cols")
 @click.pass_context
-def groupbycount(ctx, cols):
+def groupbycount(ctx, printoutput, cols):
 	viewname, newview = ctx.obj
 
 	cols = list([f.strip() for f in cols.split(",")])
@@ -165,14 +202,15 @@ def groupbycount(ctx, cols):
 
 	counts = vb.size_of_groups(data, cols)
 
+	str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
+
+	if printoutput:
+		print(str_tmpl % tuple(x for x in (cols + ["counts"])))
+
+		for elems in zip(*tuple(counts[x] for x in cols), counts["count"]):
+			print(str_tmpl % elems)
+
 	vb(newview).save(counts)
-
-
-@extract.command()
-@click.pass_context
-def matchcounter(ctx):
-	pass
-
 
 # insights from text
 @click.group()
@@ -190,11 +228,59 @@ def utils(ctx, newview, feature, viewname):
 	# persist common attributes to click
 	ctx.obj = (newview, feature, viewname)
 
+
+@utils.command()
+@click.option("--cscol", default=None, help="Name of an inner column that indicated case sensitivity of the match. Default, case insensitive.")
+@click.argument("nestedcolorder")
+@click.argument("regexcol")
+@click.argument("keywordsfile")
+@click.pass_context
+def matchcounter(ctx, cscol, nestedcolorder, regexcol, keywordsfile):
+	""" Perform a matchcount operation """
+	newview, feature, viewname = ctx.obj
+
+	data = vb(viewname).load()
+
+	keywords = vb(keywordsfile).load(index_col=None)
+
+	nestedcolorder = list([f.strip() for f in nestedcolorder.split(",")])
+
+	if not cscol:
+		keywords["case-sensitive"] = list([False for x in range(list(0, data.keys())[0])])
+	else:
+		keywords["case-sensitive"] = keywords.pop(cscol)
+
+	keywords["regex"] = keywords.pop(regexcol)
+
+	# pre_validate
+	for regex in keywords["regex"]:
+		try:
+			re.findall(re.compile(regex), "some stringg")
+		except Exception as e:
+			raise Exception(f"failed at regex {regex}")
+
+	mc = MatchCounter()
+
+	nest = mc.nestify(keywords, nestedcolorder, inner_cols=["regex", "case-sensitive"])
+
+	prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text) for text in data[feature]])
+
+	match_records = list([mc.flatten_by(ds, "sum") for ds in prepared_ds])
+
+	tbl = pd.DataFrame.from_dict(match_records).to_dict(orient="list")
+
+	for word in copy.deepcopy(list(tbl.keys())):
+		data[word] = tbl.pop(word)
+
+	vb(newview if newview else viewname).save(data)
+
 # TODO: add fine tuning parameters
 @utils.command()
 @click.option("--includep", is_flag=True, help="Raise flag to include probability scores.")
+@click.option("--clusterlb", default=15, help="min_cluster_size (HDB) (how small should the clusters be minimally?)")
+@click.option("--samplelb", default=6, help="min_samples (how conservative should the clustering be?) (larger, more conservative)")
 @click.pass_context
-def hdbscan(ctx, includep):
+def hdbscan(ctx, includep, clusterlb, samplelb):
 	""" Perform hdbscan on a desired text-vector representation """
 	newview, feature, viewname = ctx.obj
 
@@ -202,7 +288,7 @@ def hdbscan(ctx, includep):
 
 	data[feature] = vb.unstringify(data[feature])
 
-	clustered = hdb.HDBSCAN(min_cluster_size=15, prediction_data=True, min_samples=6).fit(data[feature])
+	clustered = hdb.HDBSCAN(min_cluster_size=clusterlb, prediction_data=True, min_samples=samplelb).fit(data[feature])
 
 	data['hdbscan'] = clustered.labels_
 
@@ -214,6 +300,7 @@ def hdbscan(ctx, includep):
 	sog = vb.size_of_groups(data, on="hdbscan")
 
 	print("clusterID\tcount")
+
 	for x, y in zip(sog["hdbscan"], sog["count"]):
 		print(f"{str(x)}\t{str(y)}")
 
@@ -221,8 +308,12 @@ def hdbscan(ctx, includep):
 
 
 @utils.command()
+@click.option("--components", default=10, help="UMAP (number of dimension)")
+@click.option("--neighbors", default=18, help="UMAP (low neightbors: focus on local structure)")
+@click.option("--seed", default=42, help="A random seed for controlling consistency.")
+@click.option("--dist",  default=.1, help="UMAP (larger value: allow for broader topological structure / less clumps)")
 @click.pass_context
-def umap(ctx):
+def umap(ctx, components, neighbors, seed, dist):
 	""" Perform umap on a desired text-vector representation """
 	newview, feature, viewname = ctx.obj
 
@@ -230,7 +321,7 @@ def umap(ctx):
 
 	data[feature] = vb.unstringify(data[feature])
 
-	reduced = mp.UMAP(n_components=10, n_neighbors=18, random_state=42)
+	reduced = mp.UMAP(n_components=components, n_neighbors=neighbors, random_state=seed, dist=dist)
 
 	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
 

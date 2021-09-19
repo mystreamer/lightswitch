@@ -1,6 +1,9 @@
 import unittest
+import copy
 from utils.utils import CTFIDFVectorizer
 from utils.utils import Translator
+from utils.utils import MatchCounter
+from utils.utils import KWIC
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
 
@@ -19,3 +22,81 @@ class TranslatorTest(unittest.TestCase):
 		t = Translator(auth_key="c1f62eb8-649b-514f-1f73-b3dc19e1c339:fx", source_lang="EN", target_lang="DE")
 		ttext = t.translate_text("Hello, world!")
 		assert ttext == "Hallo, Welt!"
+
+class MatchCounterTest(unittest.TestCase):
+	def setUp(self):
+		self.mc = MatchCounter()
+
+		self.listed = {"letter_cat": ["consonants", "consonants", "consonants", "consonants", "vowels", "vowels", "vowels", "vowels"],
+				"letter_order": ["first_two_c", "first_two_c", "second_two_c", "second_two_c", "first_two_v", "first_two_v", "second_two_v", "second_two_v"],
+				"regex": ["b", "c", "d", "f", "a", "e", "i", "o"],
+				"case-sensitive": [False, False, False, False, True, True, True, True]}
+
+		self.nested = {"consonants": 
+					{"first_two_c": {"regex": ["b", "c"], "case-sensitive": [False, False]}, 
+					"second_two_c": {"regex" : ["d", "f"], "case-sensitive": [False, False]}
+					}, 
+				"vowels": 
+					{"first_two_v": {"regex": ["a", "e"], "case-sensitive": [True, True]},
+					"second_two_v": {"regex": ["i", "o"], "case-sensitive": [True, True]}
+					}
+				}
+
+		self.nested_w_counts = {"consonants": 
+					{"first_two_c": {"regex": ["b", "c"], "case-sensitive": [False, False], "agg": {"sum": 7}}, 
+					"second_two_c": {"regex" : ["d", "f"], "case-sensitive": [False, False], "agg": {"sum": 7}}
+					}, 
+				"vowels": 
+					{"first_two_v": {"regex": ["a", "e"], "case-sensitive": [True, True], "agg": {"sum": 2}},
+					"second_two_v": {"regex": ["i", "o"], "case-sensitive": [True, True], "agg": {"sum": 3}}
+					}
+				}
+
+		self.nested_w_counts_processed = {"consonants": 
+					{"first_two_c": {"regex": ["b", "c"], "case-sensitive": [False, False], "agg": {"sum": 7}}, 
+					"second_two_c": {"regex" : ["d", "f"], "case-sensitive": [False, False], "agg": {"sum": 7}},
+					"agg": {"sum": 14}
+					}, 
+				"vowels": 
+					{"first_two_v": {"regex": ["a", "e"], "case-sensitive": [True, True], "agg": {"sum": 2}},
+					"second_two_v": {"regex": ["i", "o"], "case-sensitive": [True, True], "agg": {"sum": 3}},
+					"agg": {"sum": 5}
+					},
+				"agg": {"sum": 19}
+				}
+
+		self.flattened = {"consonants": 14, "first_two_c": 7, "second_two_c": 7, "vowels": 5, "first_two_v": 2, "second_two_v": 3}
+
+	def test_nestify(self):
+		ret = self.mc.nestify(self.listed, col_order=["letter_cat", "letter_order"], inner_cols=["regex", "case-sensitive"])
+		assert ret == self.nested
+
+	def test_process_leafs(self):
+		ns = copy.deepcopy(self.nested)
+
+		self.mc._process_leafs(ns, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
+
+		assert ns == self.nested_w_counts
+
+	def test_process_inner_nodes(self):
+		ns = copy.deepcopy(self.nested_w_counts)
+
+		self.mc._process_inner_nodes(ns)
+
+		assert ns == self.nested_w_counts_processed
+
+	def test_flatten_by(self):
+
+		ret = self.mc.flatten_by(self.nested_w_counts_processed, "sum")
+
+		assert ret == self.flattened
+
+	def test_count_matches(self):
+
+		ret = self.mc.count_matches(self.nested, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
+
+		assert ret == self.nested_w_counts_processed
+
+
+
+
