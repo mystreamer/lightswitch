@@ -90,8 +90,10 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 
 	matches = []
 
-	for id, text in enumerate(data[cols[0]]):
-		matches += [{"match": list(re.finditer(expr[0], text)), "keyword": expr[1], "id": id} for expr in compiled_contexts]
+	print("Getting matches")
+	with tqdm(total=len(data[cols[0]]), leave=True, position=0):
+		for id, text in tqdm(enumerate(data[cols[0]]), leave=True, position=0):
+			matches += [{"match": list(re.finditer(expr[0], text)), "keyword": expr[1], "id": id} for expr in compiled_contexts]
 
 	# print(matches)
 
@@ -103,6 +105,7 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 
 	data["sent_ranges"] = KWIC().generate_sent_ranges(data, text_col=cols[0])
 
+	print("Mapping counts")
 	with tqdm(total=len(matches), leave=True, position=0):
 		for match in tqdm(matches, position=0, leave=True):
 			lst = []

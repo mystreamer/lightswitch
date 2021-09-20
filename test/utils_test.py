@@ -71,6 +71,7 @@ class MatchCounterTest(unittest.TestCase):
 		ret = self.mc.nestify(self.listed, col_order=["letter_cat", "letter_order"], inner_cols=["regex", "case-sensitive"])
 		assert ret == self.nested
 
+
 	def test_process_leafs(self):
 		ns = copy.deepcopy(self.nested)
 
@@ -96,6 +97,19 @@ class MatchCounterTest(unittest.TestCase):
 		ret = self.mc.count_matches(self.nested, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
 
 		assert ret == self.nested_w_counts_processed
+
+	def test_incoherent(self):
+		ret = self.mc.nestify(self.listed, col_order=["letter_order", "letter_cat"], inner_cols=["regex", "case-sensitive"])
+
+		ret = self.mc.count_matches(ret, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
+
+		print(ret)
+
+		ret = self.mc.flatten_by(ret, "sum")
+
+		print(ret)
+
+		assert ret == self.flattened
 
 
 

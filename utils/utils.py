@@ -218,11 +218,11 @@ class MatchCounter(object):
         for key in list(set(ds.keys()) - set(["agg"])):
             if leaf_criterion(ds[key]):
                 # print(ds[key]["agg"][on])
-                to_fill.update({key: ds[key]["agg"][on]})
+                to_fill.update({key: ds[key]["agg"][on] if key not in to_fill.keys() else ds[key]["agg"][on] + to_fill[key]})
             else:
                 self.__rec_flatten_by(ds[key], "sum", to_fill, leaf_criterion)
                 # print(ds[key]["agg"][on])
-                to_fill.update({key: ds[key]["agg"][on]})
+                to_fill.update({key: ds[key]["agg"][on] if key not in to_fill.keys() else ds[key]["agg"][on] + to_fill[key]})
 
     def flatten_by(self, ds, on):
         """ Flatten and transpose a nested dict into linear records with respect to an item key and a key key. """
