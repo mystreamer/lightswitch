@@ -32,6 +32,11 @@ class MatchCounterTest(unittest.TestCase):
 				"regex": ["b", "c", "d", "f", "a", "e", "i", "o"],
 				"case-sensitive": [False, False, False, False, True, True, True, True]}
 
+		self.listed_w_none = {"letter_cat": [None, "consonants", "consonants", "consonants", "vowels", "vowels", "vowels", "vowels"],
+				"letter_order": ["first_two_c", "first_two_c", None, "second_two_c", "first_two_v", "first_two_v", "second_two_v", "second_two_v"],
+				"regex": ["b", "c", "d", "f", "a", "e", "i", "o"],
+				"case-sensitive": [False, False, False, False, True, True, True, True]}
+
 		self.nested = {"consonants": 
 					{"first_two_c": {"regex": ["b", "c"], "case-sensitive": [False, False]}, 
 					"second_two_c": {"regex" : ["d", "f"], "case-sensitive": [False, False]}
@@ -71,6 +76,8 @@ class MatchCounterTest(unittest.TestCase):
 		ret = self.mc.nestify(self.listed, col_order=["letter_cat", "letter_order"], inner_cols=["regex", "case-sensitive"])
 		assert ret == self.nested
 
+	def test_nestify_w_nones(self):
+		self.assertRaises(AssertionError, self.mc.nestify, self.listed_w_none, col_order=["letter_cat", "letter_order"], inner_cols=["regex", "case-sensitive"])
 
 	def test_process_leafs(self):
 		ns = copy.deepcopy(self.nested)
@@ -87,29 +94,36 @@ class MatchCounterTest(unittest.TestCase):
 		assert ns == self.nested_w_counts_processed
 
 	def test_flatten_by(self):
+		nwcp = copy.deepcopy(self.nested_w_counts_processed)
 
-		ret = self.mc.flatten_by(self.nested_w_counts_processed, "sum")
+		ret = self.mc.flatten_by(nwcp, "sum")
 
 		assert ret == self.flattened
 
 	def test_count_matches(self):
+		nested = copy.deepcopy(self.nested)
 
-		ret = self.mc.count_matches(self.nested, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
+		ret = self.mc.count_matches(nested, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
 
 		assert ret == self.nested_w_counts_processed
 
 	def test_incoherent(self):
+		listed = copy.deepcopy(self.listed)
+
 		ret = self.mc.nestify(self.listed, col_order=["letter_order", "letter_cat"], inner_cols=["regex", "case-sensitive"])
 
 		ret = self.mc.count_matches(ret, "AaaBbbCcCcDdDdEEEFFFiIiIJjJo")
 
-		print(ret)
-
 		ret = self.mc.flatten_by(ret, "sum")
 
-		print(ret)
-
 		assert ret == self.flattened
+
+	def test_depth_control_warning(self):
+		inp = {"A": {"A": {"regex": 1, "agg": {"sum": 5}}, "agg": {"sum": 5}}, "B": {"A": {"regex": 1, "agg": {"sum": 3}}, "agg": {"sum": {3}}}, "C": {"X": {"regex": 1, "agg": {"sum": 5}}, "agg": {"sum": 5}}}
+
+		self.assertRaises(AssertionError, self.mc.flatten_by, inp, "sum")
+
+
 
 
 

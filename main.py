@@ -279,6 +279,12 @@ def matchcounter(ctx, cscol, nestedcolorder, regexcol, keywordsfile):
 
 	nest = mc.nestify(keywords, nestedcolorder, inner_cols=["regex", "case-sensitive"])
 
+	# pre_validate
+	preval = mc.count_matches(copy.deepcopy(nest), "My String")
+	preval_flattened = mc.flatten_by(preval, "sum")
+	print(preval_flattened)
+
+
 	with tqdm(total=len(data[feature]), leave=True, position=0):
 		prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text) for text in tqdm(data[feature], position=0, leave=True)])
 
