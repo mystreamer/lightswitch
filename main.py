@@ -212,10 +212,13 @@ def groupbycount(ctx, printoutput, horizontal, cols):
 
 	counts = vb.size_of_groups(data, cols, horizontal=True if horizontal else False)
 
+	if horizontal:
+		cols = ["index"]
+
 	str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
 
 	if printoutput:
-		print(str_tmpl % tuple(x for x in (cols + ["counts"])))
+		print(str_tmpl % tuple(x for x in (cols + ["count"])))
 
 		for elems in zip(*tuple(counts[x] for x in cols), counts["count"]):
 			print(str_tmpl % elems)
