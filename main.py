@@ -213,7 +213,7 @@ def groupbycount(ctx, printoutput, horizontal, cols):
 	counts = vb.size_of_groups(data, cols, horizontal=True if horizontal else False)
 
 	if horizontal:
-		cols = ["index"]
+		cols = ["cols"]
 
 	str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
 
