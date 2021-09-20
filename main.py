@@ -300,7 +300,7 @@ def hdbscan(ctx, includep, clusterlb, samplelb):
 
 	data[feature] = vb.unstringify(data[feature])
 
-	clustered = hdb.HDBSCAN(min_cluster_size=clusterlb, prediction_data=True, min_samples=samplelb).fit(data[feature])
+	clustered = hdb.HDBSCAN(min_cluster_size=int(clusterlb), prediction_data=True, min_samples=int(samplelb)).fit(data[feature])
 
 	data['hdbscan'] = clustered.labels_
 
@@ -333,7 +333,7 @@ def umap(ctx, components, neighbors, seed, dist):
 
 	data[feature] = vb.unstringify(data[feature])
 
-	reduced = mp.UMAP(n_components=components, n_neighbors=neighbors, random_state=seed, dist=dist)
+	reduced = mp.UMAP(n_components=int(components), n_neighbors=int(neighbors), random_state=int(seed), dist=float(dist))
 
 	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
 
@@ -360,21 +360,26 @@ def encoder(ctx, newview, filepath, textcol, viewname):
 
 @encoder.command()
 @click.option("--modelname", default=None, help="SBERT model to be used")
+@click.option("--multiprocessing", is_flag=True, default=False, help="Use multiprocessing?")
+@click.option("--chunksize", default=None)
 @click.option("--clip", default=None, help="Optional clipping parameter")
 @click.pass_context
-def sbert(ctx, modelname, clip):
+def sbert(ctx, modelname, multiprocessing, chunksize, clip):
 	newview, filepath, textcol, viewname = ctx.obj
 
 	if not newview and clip:
 		click.confirm('Clip is active, without a new viewname. This may overwrite your current view. Continue?', abort=True)
 
-	data = vb(viewname).load(filepath, clip=int(clip))
+	data = vb(viewname).load(filepath if filepath else None, clip=int(clip) if clip else None)
 
 	enc = SBERTEncoder('T-Systems-onsite/cross-en-de-roberta-sentence-transformer' if not modelname else modelname)
 
-	embeds = enc.encode(data[textcol])
-
-	data['sbert'] = vb.stringify(map(lambda x: x.tolist(), embeds))
+	if multiprocessing:
+		embeds = enc.encode_multiprocessed(data[textcol], chunk_size=int(chunksize) if chunksize else None)
+		data['sbert'] = embeds
+	else:
+		embeds = enc.encode(data[textcol])
+		data['sbert'] = vb.stringify(map(lambda x: x.tolist(), embeds))
 
 	vb(newview if newview else viewname).save(data)
 
