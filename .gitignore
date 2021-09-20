@@ -1,4 +1,8 @@
 __pycache__/
-views/
+# exclude everything
+views/*
+
+# exception to the rule
+!views/.gitkeep
 
 checkit.txt
