@@ -200,16 +200,17 @@ def filterby(ctx, lbd):
 
 @extract.command()
 @click.option("--printoutput", is_flag=True, default=False, help="Whether to print the output of the count.")
+@click.option("--horizontal", is_flag=True, default=False, help="Only works for col<int>.")
 @click.argument("cols")
 @click.pass_context
-def groupbycount(ctx, printoutput, cols):
+def groupbycount(ctx, printoutput, horizontal, cols):
 	viewname, newview = ctx.obj
 
 	cols = list([f.strip() for f in cols.split(",")])
 
 	data = vb(viewname).load()
 
-	counts = vb.size_of_groups(data, cols)
+	counts = vb.size_of_groups(data, cols, horizontal=True if horizontal else False)
 
 	str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
 

@@ -76,6 +76,11 @@ class ViewBuilderTest(unittest.TestCase):
 		for x, y in zip(res["A"], res["count"]):
 			assert solution[x] == y
 
+	def test_size_of_groups_horizontal(self):
+		gs = {"A": [1, 0, 1, 0, 0], "B": [1, 1, 1, 0, 0]}
+		res = vb.size_of_groups(gs, ["A", "B"], horizontal=True)
+		assert res == {"cols": ['A', 'B'], "count": [2, 3]}
+
 	def test_aggregate_text_on_columns_no_delim(self):
 		tx = {"A": ["Hello1", "Hello2", "Hello3"], "B": ["World1", "World2", "World3"], "C": ["!1", "!2", "!3"]}
 		res = vb.aggregate_text_on_columns(tx, cols=["A", "B", "C"])

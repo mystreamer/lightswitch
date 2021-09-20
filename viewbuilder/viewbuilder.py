@@ -79,9 +79,11 @@ class ViewBuilder(object):
 		return df["ret"].tolist()
 
 	@staticmethod
-	def size_of_groups(dc, on):
+	def size_of_groups(dc, on, horizontal=False):
 		""" Get the size of different groups """
 		df = pd.DataFrame.from_dict(dc)
+		if horizontal:
+			return df[on].sum().reset_index(name="count").rename(columns={"index": "cols"}).to_dict(orient="list")
 		return df.groupby(on).size().reset_index(name="count").to_dict(orient='list')
 
 	@staticmethod
