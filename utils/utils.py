@@ -220,11 +220,11 @@ class MatchCounter(object):
 		for key in list(set(ds.keys()) - set(["agg"])):
 
 			if key in depth_control.keys() and depth_control[key] > depth:
-				assert False, "Structural incoherence, cannot flatten on a parent, where a non-ancestor of that name exists."
+				assert False, "Structural incoherence, cannot flatten on a inner node, where a non-descendant of that name exists."
 			elif key in depth_control.keys() and depth_control[key] < depth:
 				assert key in keystack if keystack != [] else True, "Found a node with the same name as a non-ancestor"
-				warnings.warn("Skipping key of ancestor of same name in a lower hierarchy level.")
-				print(keystack)
+				warnings.warn("Skipping key of descendant of same name in a lower hierarchy level.")
+				# print(keystack)
 				continue
 
 			to_fill.update({key: ds[key]["agg"][on] if key not in to_fill.keys() else ds[key]["agg"][on] + to_fill[key]})

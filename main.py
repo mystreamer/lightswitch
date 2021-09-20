@@ -92,7 +92,7 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 
 	print("Getting matches")
 	with tqdm(total=len(data[cols[0]]), leave=True, position=0):
-		for id, text in tqdm(enumerate(data[cols[0]]), leave=True, position=0):
+		for id, text in enumerate(tqdm(data[cols[0]], leave=True, position=0)):
 			matches += [{"match": list(re.finditer(expr[0], text)), "keyword": expr[1], "id": id} for expr in compiled_contexts]
 
 	# print(matches)
