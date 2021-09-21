@@ -90,40 +90,40 @@ def read_csv(overview_file):
     df = pd.read_csv(overview_file, encoding='utf-8')
     # df.set_index('id', drop=False)
 
-    # Check if all columns exist:
-    if 'sub_org' not in df.columns:
-        df['sub_org'] = np.nan
+    # # Check if all columns exist:
+    # if 'sub_org' not in df.columns:
+    #     df['sub_org'] = np.nan
 
-    if 'title' not in df.columns:
-        df['title'] = np.nan
+    # if 'title' not in df.columns:
+    #     df['title'] = np.nan
 
-    if 'date' not in df.columns:
-        df['date'] = np.nan
+    # if 'date' not in df.columns:
+    #     df['date'] = np.nan
 
-    if 'teaser' not in df.columns:
-        df['teaser'] = np.nan
+    # if 'teaser' not in df.columns:
+    #     df['teaser'] = np.nan
 
-    if 'article_text' not in df.columns:
-        df['article_text'] = np.nan
+    # if 'article_text' not in df.columns:
+    #     df['article_text'] = np.nan
 
-    if 'date_standardized' not in df.columns:
-        df['date_standardized'] = np.nan
+    # if 'date_standardized' not in df.columns:
+    #     df['date_standardized'] = np.nan
 
-    if 'text_preprocessed' not in df.columns:
-        df['text_preprocessed'] = np.nan
+    # if 'text_preprocessed' not in df.columns:
+    #     df['text_preprocessed'] = np.nan
 
-    if 'language_id' not in df.columns:
-        df['language_id'] = np.nan
+    # if 'language_id' not in df.columns:
+    #     df['language_id'] = np.nan
 
-    # set type of columns
-    df["sub_org"]=df["sub_org"].astype(str)
-    df["title"]=df["title"].astype(str)
-    df["date"]=df["date"].astype(str)
-    df["teaser"]=df["teaser"].astype(str)
-    df["article_text"]=df["article_text"].astype(str)
-    df["date_standardized"]=df["date_standardized"].astype(str)
-    df["text_preprocessed"]=df["text_preprocessed"].astype(str)
-    df["language_id"]=df["language_id"].astype(str)
+    # # set type of columns
+    # df["sub_org"]=df["sub_org"].astype(str)
+    # df["title"]=df["title"].astype(str)
+    # df["date"]=df["date"].astype(str)
+    # df["teaser"]=df["teaser"].astype(str)
+    # df["article_text"]=df["article_text"].astype(str)
+    # df["date_standardized"]=df["date_standardized"].astype(str)
+    # df["text_preprocessed"]=df["text_preprocessed"].astype(str)
+    # df["language_id"]=df["language_id"].astype(str)
 
     return df
 
