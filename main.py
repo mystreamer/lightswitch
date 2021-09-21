@@ -161,7 +161,7 @@ def ctfidf(ctx, ranks, lang, groupby, cols):
 		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
 		cols = ["combined_text"]
 
-	records = CTFIDFVectorizer().get_most_prominent_words(data, groupby, cols[0], ranks, lang)
+	records = CTFIDFVectorizer().get_most_prominent_words(data, groupby, cols[0], int(ranks), lang)
 
 	vb(newview).save(records)
 
@@ -336,7 +336,7 @@ def hdbscan(ctx, includep, clusterlb, samplelb):
 @click.option("--components", default=10, help="UMAP (number of dimension)")
 @click.option("--neighbors", default=18, help="UMAP (low neightbors: focus on local structure)")
 @click.option("--seed", default=42, help="A random seed for controlling consistency.")
-@click.option("--dist",  default=.1, help="UMAP (larger value: allow for broader topological structure / less clumps)")
+@click.option("--dist",  default=0.1, help="UMAP (larger value: allow for broader topological structure / less clumps)")
 @click.pass_context
 def umap(ctx, components, neighbors, seed, dist):
 	""" Perform umap on a desired text-vector representation """
@@ -346,7 +346,7 @@ def umap(ctx, components, neighbors, seed, dist):
 
 	data[feature] = vb.unstringify(data[feature])
 
-	reduced = mp.UMAP(n_components=int(components), n_neighbors=int(neighbors), random_state=int(seed), dist=float(dist))
+	reduced = mp.UMAP(n_components=int(components), n_neighbors=int(neighbors), random_state=int(seed), min_dist=float(dist))
 
 	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
 

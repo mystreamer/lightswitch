@@ -1,4 +1,4 @@
-FROM python:3.8-slim-buster
+FROM python:3.7-slim-buster
 WORKDIR /app
 RUN apt-get update && apt-get install gcc -y && apt-get clean
 RUN pip install torch==1.8.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
