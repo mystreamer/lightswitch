@@ -320,7 +320,7 @@ def hdbscan(ctx, includep, clusterlb, samplelb):
 	if includep:
 		data['hdbscan_p'] = clustered.probabilities_
 
-	print(f"In total {len(clustered.labels_)} clusters have been generated.")
+	print(f"In total {len(set(clustered.labels_))} clusters have been generated.")
 
 	sog = vb.size_of_groups(data, on="hdbscan")
 
