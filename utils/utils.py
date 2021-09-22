@@ -44,7 +44,7 @@ class CTFIDFVectorizer(TfidfTransformer):
 		count = count_vectorizer.transform(text_per_class[text_column_name])
 		words = count_vectorizer.get_feature_names()
 		ctfidf = self.fit_transform(count, n_samples=len(df)).toarray()
-		return ctfidf, words, text_per_class.index.tolist()
+		return ctfidf, count.toarray(), words, text_per_class.index.tolist()
 
 	def get_most_prominent_words(self, dc, groupby, text_column_name, nr_of_ranks, stopword_lang):
 		""" Generate TFIDF DataFrame with the n_most prominent words per group
@@ -59,12 +59,15 @@ class CTFIDFVectorizer(TfidfTransformer):
 		"""
 		df = pd.DataFrame.from_dict(dc)
 
-		ctfidf, words, doc_names = self.__TFIDF_on_group(df, groupby, text_column_name, stopword_lang)
+		ctfidf, count, words, doc_names = self.__TFIDF_on_group(df, groupby, text_column_name, stopword_lang)
 
 		words_per_class = {doc_name: list([words[index] for index in ctfidf[i].argsort()[-nr_of_ranks:]]) for i, doc_name in enumerate(doc_names)}
 
+		words_tf_per_class = {doc_name: list([words[index] for index in count[i].argsort()[-nr_of_ranks:]]) for i, doc_name in enumerate(doc_names)}
+
 		ctftid_dict = {'group_label': [d for d in doc_names for i in range(0, len(words_per_class[d]))],
 			'word': [words_per_class[d][i] for d in doc_names for i in range(0, len(words_per_class[d]))],
+			'word_tf': [words_tf_per_class[d][i] for d in doc_names for i in range(0, len(words_per_class[d]))],
 			'rank': [i for d in doc_names for i in range(1, nr_of_ranks + 1)],
 			'tfidf': [ctfidf[i][score] for i, _ in enumerate(doc_names) for score in ctfidf[i].argsort()[-nr_of_ranks:][::-1]]}
 
@@ -82,9 +85,10 @@ class CTFIDFVectorizer(TfidfTransformer):
 		"""
 		df = pd.DataFrame.from_dict(dc)
 
-		ctfidf, _, doc_names = self.__TFIDF_on_group(df, groupby, text_column_name, stopword_lang)
+		ctfidf, _, _, doc_names = self.__TFIDF_on_group(df, groupby, text_column_name, stopword_lang)
 
 		return pd.DataFrame(cosine_similarity(ctfidf), index=doc_names, columns=doc_names)
+
 
 class Translator(object):
 	""" Translate any strings given a source and target language using the DeepL API """
