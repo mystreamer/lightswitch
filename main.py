@@ -25,6 +25,7 @@ class PythonLiteralOption(click.Option):
 class ArgHolder(object):
 	pass
 
+
 @click.group()
 def entrypoint():
 	pass
@@ -45,6 +46,7 @@ def extract(ctx, viewname, newview):
 	"""
 	# persist common attributes to click
 	ctx.obj = (viewname, newview)
+
 
 @extract.command()
 @click.option("--nooverlap", is_flag=True, default=False, help="Kwics will not overlap in their contexts, the first match only will count.")
@@ -144,13 +146,15 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 		DS["parent_id"] = DS.pop("id")
 		vb(newview).save(DS)
 
+
 @extract.command()
+@click.option("--includetf", is_flag=True, default=False, help="Should word_tf (simple term frequency) be included?")
 @click.option("--ranks", default=20, help="How many ranks should be generated?")
 @click.option("--lang", default="german", help="Language to use for stopword removal")
 @click.argument("groupby")
 @click.argument("cols")
 @click.pass_context
-def ctfidf(ctx, ranks, lang, groupby, cols):
+def ctfidf(ctx, includetf, ranks, lang, groupby, cols):
 	viewname, newview = ctx.obj
 
 	data = vb(viewname).load()
@@ -163,7 +167,11 @@ def ctfidf(ctx, ranks, lang, groupby, cols):
 
 	records = CTFIDFVectorizer().get_most_prominent_words(data, groupby, cols[0], int(ranks), lang)
 
+	if not includetf:
+		records.pop("word_tf")
+
 	vb(newview).save(records)
+
 
 @extract.command()
 @click.option("--lang", default="de", help="Language to use for stopword removal")
@@ -200,6 +208,7 @@ def filterby(ctx, lbd):
 	_, filtered = vb.filter(data, lbd)
 
 	vb(newview).save(filtered)
+
 
 @extract.command()
 @click.option("--printoutput", is_flag=True, default=False, help="Whether to print the output of the count.")
