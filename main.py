@@ -553,7 +553,7 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, l
 
 	dc.pop("feature_combination")
 
-	vb(newview if newview else viewname).save(data)
+	vb(newview if newview else viewname).save(dc)
 	# qs = learner.get_queryset()
 
 
