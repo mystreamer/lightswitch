@@ -31,6 +31,47 @@ def entrypoint():
 	pass
 
 
+@click.command()
+@click.option("--type", default="inner")
+@click.argument("left")
+@click.argument("right")
+@click.argument("newview")
+@click.argument("leftcols")
+@click.argument("rightcols")
+@click.pass_context
+def join(ctx, type, left, right, newview, leftcols, rightcols):
+	""" Join two files based on a single common attribute
+
+	LEFT: The name of the first view
+
+	RIGHT: The name of the second view
+
+	LEFTCOLS: Cols from the left to use the join on (left will always be the dominant naming)
+
+	RIGHTCOLS: Cols from the right to use the join on
+
+	TYPE: e.g. inner
+
+	"""
+
+	data1 = vb(left).load()
+
+	data2 = vb(right).load()
+
+	leftcols = list([f.strip() for f in leftcols.split(",")])
+
+	rightcols = list([f.strip() for f in rightcols.split(",")])
+
+	assert len(leftcols) == len(rightcols), "The left and right column number must match"
+
+	# normalize attributes of second columns
+	for attr1, attr2 in zip(leftcols, rightcols):
+		data2[attr1] = data2.pop(attr2)
+
+	data = vb.join_on(data1, data2, leftcols, join_type=type)
+
+	vb(newview).save(data)
+
 # extracts from existing view
 @click.group()
 @click.argument("viewname")
@@ -236,6 +277,26 @@ def groupbycount(ctx, printoutput, horizontal, cols):
 			print(str_tmpl % elems)
 
 	vb(newview).save(counts)
+
+
+@extract.command()
+@click.option("--delim", default=", ", help="Only works for col<int>.")
+@click.argument("groupbycols")
+@click.argument("condensecols")
+@click.pass_context
+def groupbycondense(ctx, delim, groupbycols, condensecols):
+	""" Condense text column(s) by grouping on col(s) """
+	viewname, newview = ctx.obj
+
+	groupbycols = list([f.strip() for f in groupbycols.split(",")])
+
+	condensecols = list([f.strip() for f in condensecols.split(",")])
+
+	data = vb(viewname).load()
+
+	data = vb.aggregate_text_on_label(data, label_col=groupbycols, text_col=condensecols, delim=delim)
+
+	vb(newview).save(data)
 
 # insights from text
 @click.group()
@@ -509,6 +570,7 @@ def validate():
 	pass
 
 # add different sub entrypoints
+entrypoint.add_command(join)
 entrypoint.add_command(extract)
 entrypoint.add_command(utils)
 entrypoint.add_command(encoder)

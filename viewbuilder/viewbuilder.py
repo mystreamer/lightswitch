@@ -1,6 +1,8 @@
+import json
 import numpy as np
 import pandas as pd
-import json
+from typing import Union
+from functools import partial
 
 class ViewBuilder(object):
 	""" Encapsulates some high-level behaviour on dicts and lists using other libraries """
@@ -65,10 +67,15 @@ class ViewBuilder(object):
 		return list(map(json.loads, elements))
 
 	@staticmethod
-	def aggregate_text_on_label(dc, label_col:str, text_col:str):
-		""" Buckets all text together that belongs to the same label """
+	def aggregate_text_on_label(dc, label_col: Union[list, str], text_col: Union[list, str], delim=" "):
+		""" Buckets all text together that belongs to the same label, Nones are ignored"""
+		label_col = label_col if isinstance(label_col, list) else [label_col]
+		text_col = text_col if isinstance(text_col, list) else [text_col]
 		tpl = pd.DataFrame.from_dict(dc)
-		tpl = tpl.groupby([label_col], as_index=False).agg({text_col: ' '.join})
+		j_func = partial(str.join, delim)
+		f_func = partial(filter, None)
+		aggregations = dict({col: lambda x: j_func(f_func(x)) for col in text_col})
+		tpl = tpl.groupby(label_col, as_index=False).agg(aggregations)
 		return tpl.to_dict(orient='list')
 
 	@staticmethod
