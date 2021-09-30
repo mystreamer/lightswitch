@@ -1,4 +1,7 @@
 __pycache__/
+*.py[cod]
+*$py.class
+
 # exclude everything
 views/*
 
@@ -6,3 +9,5 @@ views/*
 !views/.gitkeep
 
 checkit.txt
+
+.DS_Store
