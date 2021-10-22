@@ -477,10 +477,11 @@ def sbert(ctx, modelname, multiprocessing, chunksize, clip):
 @click.option("--nsuggest", default=5)
 @click.option("--learnername", default="mylearner")
 @click.option("--multilabel", is_flag=True, default=False)
+@click.option("--binarize", is_flag=True, default=False)
 @click.argument("features")
 @click.argument("label")
 @click.argument("viewname")
-def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, label, viewname):
+def train(newview, annotatorfile, nsuggest, learnername, multilabel, binarize, features, label, viewname):
 	""" Initiate a training process on a chosen view.
 
 	FEATURES: comma separated feature names / columns of the views (will be combined)
@@ -488,6 +489,8 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, l
 	LABEL: the label the model will be trained on
 	"""
 	dc = vb(viewname).load()
+
+	assert multilabel == binarize, "Non binarized, multilabel currently not supported."
 
 	feature_cols = list([f.strip() for f in features.split(",")])
 
@@ -538,14 +541,25 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, features, l
 
 	print(f"Experienced {rand_encounters} random encounters.")
 
-	for c in MLB.classes_.tolist():
-		dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
+	if binarize:
+		for c in MLB.classes_.tolist():
+			dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
 
-	for c, col_l, col_unl in zip(MLB.classes_.tolist(), np.array(y).T, np.array(predicts).T):
-		for i, x in enumerate(col_l.tolist()):
-			dc[c][mapper_l[i]] = x
-		for i, x in enumerate(col_unl.tolist()):
-			dc[c][mapper_unl[i]] = x
+		for c, col_l, col_unl in zip(MLB.classes_.tolist(), np.array(y).T, np.array(predicts).T):
+			for i, x in enumerate(col_l.tolist()):
+				dc[c][mapper_l[i]] = x
+			for i, x in enumerate(col_unl.tolist()):
+				dc[c][mapper_unl[i]] = x
+	else:
+		dc["train"] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
+
+		ivt_l = MLB.inverse_transform(y)
+		for i, row_l in enumerate(ivt_l):
+			dc["train"][mapper_l[i]] = row_l[0]
+
+		ivt_unl = MLB.inverse_transform(predicts)
+		for i, row_unl in enumerate(ivt_unl):
+			dc["train"][mapper_unl[i]] = row_unl[0]
 
 	dc["sbert"] = vb.stringify(dc["sbert"])
 
