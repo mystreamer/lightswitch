@@ -513,14 +513,14 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, binarize, f
 	MLB = MultiLabelBinarizer()
 
 	if multilabel:
-		print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
-		MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", l.lower())]))])
-		y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", e.lower()))) for e in labelled[label]]))
+		print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", str(l).lower())]))])
+		MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", str(l).lower())]))])
+		y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", str(e).lower()))) for e in labelled[label]]))
 	else:
 		# if there a multiple labels present under the nML setting, we just use the first
-		print([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", l.lower())[0]]]))])
-		MLB.fit([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", l.lower())[0]]]))])
-		y = MLB.transform(list([list(map(lambda x: x.strip(), [re.split("[,;]", e.lower())[0]])) for e in labelled[label]]))
+		print([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", str(l).lower())[0]]]))])
+		MLB.fit([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", str(l).lower())[0]]]))])
+		y = MLB.transform(list([list(map(lambda x: x.strip(), [re.split("[,;]", str(e).lower())[0]])) for e in labelled[label]]))
 
 	learner = Learner(learner_name=learnername, n_suggest=nsuggest, X=X, y=y, multilabel=multilabel)
 
