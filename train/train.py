@@ -49,11 +49,11 @@ class Learner(object):
 				query_strategy=min_confidence if self.multilabel else uncertainty_sampling,
 				X_training=self.X["train"], y_training=self.y))
 
-		self.learners.append(
-			ActiveLearner(
-				estimator=self.clf,
-				query_strategy=max_score if self.multilabel else margin_sampling,
-				X_training=self.X["train"], y_training=self.y))
+		# self.learners.append(
+		# 	ActiveLearner(
+		# 		estimator=self.clf,
+		# 		query_strategy=max_score if self.multilabel else margin_sampling,
+		# 		X_training=self.X["train"], y_training=self.y))
 
 	def _idx_columnwise_nearest(self, matrix, nearestto, n_nearest):
 		idxs = []
