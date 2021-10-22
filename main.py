@@ -557,7 +557,7 @@ def train(newview, annotatorfile, nsuggest, learnername, multilabel, binarize, f
 		for i, row_l in enumerate(ivt_l):
 			dc["train"][mapper_l[i]] = row_l[0]
 
-		ivt_unl = MLB.inverse_transform(predicts)
+		ivt_unl = MLB.inverse_transform(np.array(predicts))
 		for i, row_unl in enumerate(ivt_unl):
 			dc["train"][mapper_unl[i]] = row_unl[0]
 
