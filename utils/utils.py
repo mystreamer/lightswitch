@@ -115,7 +115,7 @@ class Translator(object):
 		}
 
 		try:
-			res = requests.get(f"https://api-free.deepl.com/v2/translate", params=params)
+			res = requests.post(f"https://api-free.deepl.com/v2/translate", params=params)
 		except requests.exceptions.RequestException as e:
 			raise SystemExit(e)
 
