@@ -333,10 +333,11 @@ def translate(ctx, icol, ival, newcol, source, target):
 
 	col = newcol if newcol else feature
 
-	if icol and ival:
-		data[col] = map(lambda x: t.translate_text(x[0]) if x[1] == ival else x[0], zip(data[feature], data[icol]))
-	else:
-		data[col] = map(lambda x: t.translate_text(x), data[feature])
+	with tqdm(total=len(data[feature]), leave=True, position=0):
+		if icol and ival:
+			data[col] = map(lambda x: t.translate_text(x[0]) if x[1] == ival else x[0], tqdm(zip(data[feature], data[icol]), position=0, leave=True, total=len(data[feature])))
+		else:
+			data[col] = map(lambda x: t.translate_text(x), tqdm(data[feature], position=0, leave=True))
 
 	vb(newview if newview else viewname).save(data)
 
