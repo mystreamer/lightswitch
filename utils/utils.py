@@ -121,7 +121,13 @@ class Translator(object):
 
 		# TODO: Cases for multiple translations, if even possible by the API.
 
-		return res.json()["translations"][0]["text"]
+		try:
+			ret = res.json()["translations"][0]["text"]
+		except:
+			ret = "Translation failed."
+			print(res.json())
+
+		return ret
 
 class KWIC(object):
 	def __init__(self):
