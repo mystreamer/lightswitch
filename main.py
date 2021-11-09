@@ -11,7 +11,7 @@ from train.train import Learner
 from encoder.encoder import SBERTEncoder
 from viewbuilder.viewbuilder import ViewBuilder as vb
 from sklearn.preprocessing import MultiLabelBinarizer
-from utils.utils import KWIC, CTFIDFVectorizer, MatchCounter
+from utils.utils import KWIC, CTFIDFVectorizer, MatchCounter, Translator
 
 
 class PythonLiteralOption(click.Option):
@@ -314,6 +314,32 @@ def utils(ctx, newview, feature, viewname):
 	# persist common attributes to click
 	ctx.obj = (newview, feature, viewname)
 
+@utils.command()
+@click.option("--icol", default=None)
+@click.option("--ival", default=None)
+@click.option("--newcol", default=None)
+@click.argument("source")
+@click.argument("target")
+@click.pass_context
+def translate(ctx, icol, ival, newcol, source, target):
+	""" Translate texts """
+	newview, feature, viewname = ctx.obj
+
+	print(f"Translating all values where {icol} = {ival} on {feature} from {source} to {target}")
+
+	t = Translator(auth_key="c1f62eb8-649b-514f-1f73-b3dc19e1c339:fx", source_lang=source, target_lang=target)
+
+	data = vb(viewname).load()
+
+	col = newcol if newcol else feature
+
+	if icol and ival:
+		data[col] = map(lambda x: t.translate_text(x[0]) if x[1] == ival else x[0], zip(data[feature], data[icol]))
+	else:
+		data[col] = map(lambda x: t.translate_text(x), data[feature])
+
+	vb(newview if newview else viewname).save(data)
+
 
 @utils.command()
 @click.option("--cscol", default=None, help="Name of an inner column that indicated case sensitivity of the match. Default, case insensitive.")
@@ -583,6 +609,35 @@ def validate():
 	"""
 	pass
 
+@click.group()
+@click.argument("view1")
+@click.argument("view2")
+@click.pass_context
+def append(ctx, view1, view2):
+	"""Append a column to another view"""
+	ctx.obj = (view1, view2)
+
+@append.command()
+@click.option("--newcolname", default=None, help="Should the column be renamed before being appended?")
+@click.argument("col")
+# TODO: add a window size argument
+@click.pass_context
+def column(ctx, newcolname, col):
+	""" Append column from view1 to view 2 """
+	view1, view2 = ctx.obj
+
+	data1 = vb(view1).load()
+	data2 = vb(view2).load()
+
+	newcolname = newcolname if newcolname else col
+
+	if newcolname in data2.keys():
+		click.confirm('You are about to overwrite an initial column from view2. Continue?', abort=True)
+
+	data2[newcolname] = data1[col]
+
+	vb(view2).save(data2)
+
 # add different sub entrypoints
 entrypoint.add_command(join)
 entrypoint.add_command(extract)
@@ -590,6 +645,7 @@ entrypoint.add_command(utils)
 entrypoint.add_command(encoder)
 entrypoint.add_command(train)
 entrypoint.add_command(validate)
+entrypoint.add_command(append)
 
 if __name__ == "__main__":
 	entrypoint()
