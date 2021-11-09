@@ -125,8 +125,9 @@ class Translator(object):
 			ret = res.json()["translations"][0]["text"]
 		except:
 			print("Translation failed")
-			ret = "Translation failed."
 			print(res)
+			print(text)
+			ret = text
 
 		return ret
 
