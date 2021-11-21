@@ -2,12 +2,17 @@ import re
 import ast
 import copy
 import click
+import pickle
 import umap as mp
 import numpy as np
 import pandas as pd
 import hdbscan as hdb
 from tqdm import tqdm
+from pathlib import Path
+from functools import partial
 from train.train import Learner
+from transformers import pipeline
+from nltk.tokenize import sent_tokenize
 from encoder.encoder import SBERTEncoder
 from viewbuilder.viewbuilder import ViewBuilder as vb
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -313,6 +318,154 @@ def utils(ctx, newview, feature, viewname):
 	"""
 	# persist common attributes to click
 	ctx.obj = (newview, feature, viewname)
+
+@utils.command()
+@click.option("--modelname", default=None, help="An optional model name. Default XLM-roberta (Cardiffnlp)")
+@click.pass_context
+def sentiment(ctx, modelname):
+	newview, feature, viewname = ctx.obj
+
+	data = vb(viewname).load()
+
+	modelname = "cardiffnlp/twitter-xlm-roberta-base-sentiment" if not modelname else modelname
+
+	sentimentanalyzer = pipeline("sentiment-analysis", model=modelname, tokenizer=modelname)
+
+	NOTEBOOK_DIR = ""
+	NAME = viewname
+
+	# surrogate construction
+	data["surrogate_id"] = [i for i in range(0,len(data[list(data.keys())[0]]))]
+
+	DS = {"text": data[feature]}
+
+	DS["comment_id"] = data["surrogate_id"]
+
+	def split_sentencewise(data: dict, on_col: str = None):
+			""" Split all sentences in a cell
+			Takes:
+			 data: a dict with two keys: a list with texts, a list with ids
+			 on_col: specifies the column that contains the list of texts
+			"""
+			# assert that we are only dealing with Nx2 table. and that on_col is in keys
+			assert len(data.keys()) == 2 and on_col in data.keys()
+			sentencewise = []
+			df = pd.DataFrame.from_dict(data)
+			# get column names as indices for tuple access
+			print(df.columns.to_list())
+			i = df.columns.to_list().index(list(set(df.columns.to_list()) - {on_col})[0]) + 1
+			j = df.columns.to_list().index(on_col) + 1
+			# iterate through rows, if a text-cell contains several sentences => split into 2 rows.
+			for row in df.itertuples():
+				for sentence in sent_tokenize(row[j]):
+					sentencewise.append((row[i], sentence))
+			# return the dict
+			return pd.DataFrame(sentencewise, columns=[df.columns.to_list()[i - 1], on_col]).to_dict(orient="list")
+
+	# split our actual data sentencewise (elongates table vertically)
+	split_series = split_sentencewise(DS, on_col = "text")
+
+	# initialize new columns
+	scores = []
+	labels = []
+
+	# add sentiment score and labels as new columns
+	split_series.update({"score": list(scores), "label": list(labels)})
+
+	# check if existing checkpoint exists
+	if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
+		# ask if checkpoint should be used to restore where took off
+		# res = input("Do you want to load from checkpoint? [y/N]")
+		if click.confirm("Do you want to load from old checkpoint?"):
+			with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'rb') as handle:
+				a = pickle.load(handle)
+				# assert precondition is met
+				if len(a["comment_id"]) != len(split_series["comment_id"]):
+					a["comment_id"] = split_series["comment_id"]
+					a["text"] = split_series["text"]
+				# balance scores and labels if unbalanced
+				while len(a["label"]) != len(a["score"]):
+					if len(a["label"]) < len(a["score"]):
+						a["label"].append("LABEL_0")
+					else:
+						a["score"].append(0.0)
+				split_series = a
+		else:
+			# delete the checkpoint if not wanted
+			try:
+				Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
+			except OSError as e:
+				print("Error: %s : %s" % (file_path, e.strerror))
+
+	# specify to save checkpoints every n-th iteration to save progress
+	checkpoint_every = 1000
+	# using counter variable here as tqdm doesn't operate well on enums
+	counter = 0
+	# assign a variable len_initial, for the case a checkpoint is loaded
+	len_initial = len(split_series["label"])
+	# fails variable to look how many times sentimentanalyzer failed
+	fails = 0
+
+	# main loop
+	with tqdm(total=len(split_series["text"]), leave=True, position=0):
+		for sent in tqdm(split_series["text"], total=len(split_series["text"]), leave=True, position=0):
+			# skip processing if the data already exists as by the checkpoint
+			if len(split_series["text"][counter:len_initial]) > 0:
+				counter += 1
+				continue
+			# try to forwardpass the text into the sentiment analysis pipeline
+			try:
+				obj = sentimentanalyzer(sent)[0]
+				split_series["label"].append(obj["label"])
+				split_series["score"].append(obj["score"])
+			# if the analysis for a sentence fails (due to unclean data, just add as neutral)
+			except:
+				fails += 1
+				split_series["label"].append("LABEL_0")
+				split_series["score"].append(0.0)
+			# update counter
+			counter += 1
+			# save the already generated dict on every n-th iteration as specified with checkpoint_every
+			if counter % checkpoint_every == 0:
+				with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'wb') as handle:
+					pickle.dump(split_series, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+	for i, l in enumerate(split_series["label"]):
+		if l.upper() == "LABEL_0" or l.upper() == "NEGATIVE":
+			split_series["score"][i] *= -1
+		elif l.upper() == "LABEL_1" or l.upper() == "NEUTRAL":
+			split_series["score"][i] = None
+
+	# transform dict into dataframe
+	df_scores = pd.DataFrame.from_dict(split_series)
+	# print(df_scores)
+
+	# neutrals are skipped
+	df_scores = df_scores.groupby("comment_id", as_index=False)["score"].mean()
+
+	#transform neutrals to 0
+	df_scores = df_scores.fillna(0.0)
+
+	# rename the columns
+	df_scores = df_scores.rename({'score': f"sentiment_score", "comment_id": "surrogate_id"}, axis=1)
+
+	datascores = df_scores.to_dict(orient="list")
+
+
+	# print(data)
+
+	data = vb.join_on(data, datascores, "surrogate_id")
+
+	data.pop("surrogate_id")
+
+	vb(newview if newview else viewname).save(data)
+
+	# delete checkpoint after process ends
+	if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
+		try:
+			Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
+		except OSError as e:
+			print("Error: %s : %s" % (file_path, e.strerror))
 
 @utils.command()
 @click.option("--icol", default=None)
