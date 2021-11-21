@@ -783,6 +783,8 @@ def column(ctx, newcolname, col):
 	data1 = vb(view1).load()
 	data2 = vb(view2).load()
 
+	assert len(data1[list(data1.keys())[0]]) == len(data2[list(data2.keys())[0]]), "Table length must be equal."
+
 	newcolname = newcolname if newcolname else col
 
 	if newcolname in data2.keys():
