@@ -837,16 +837,16 @@ def sentencewise(ctx, col, newcolname, nsent):
 	cycleBuffer = []
 	for row in df.itertuples():
 		for sentence in sent_tokenize(row[j]):
-			print(sentence)
+			# print(sentence)
 			cycleBuffer.append(sentence)
 			count += 1
 			if count % nsent == 0:
-				print("flushed")
+				# print("flushed")
 				sentencewise.append((row[i], " ".join(cycleBuffer)))
 				cycleBuffer = []
 				count = 0
 		if len(cycleBuffer) > 0:
-			print("final flush")
+			# print("final flush")
 			# flush the remaining before switching to new row
 			sentencewise.append((row[i], " ".join(cycleBuffer)))
 			cycleBuffer = []
