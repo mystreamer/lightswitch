@@ -794,6 +794,83 @@ def column(ctx, newcolname, col):
 
 	vb(view2).save(data2)
 
+
+@click.group()
+@click.argument("viewname")
+@click.pass_context
+def segment(ctx, viewname):
+	"""Append a column to another view"""
+	ctx.obj = (viewname)
+
+
+@segment.command()
+@click.argument("col")
+@click.option("--newcolname", default=None, help="Should the column be renamed before being appended?")
+@click.option("--nsent", default=8, help="Into how many sentences should the text per column be expanded?")
+@click.pass_context
+def sentencewise(ctx, col, newcolname, nsent):
+	""" Given a table with a column of large texts per cells, split this into n-sentences (elongates the table) """
+	view = ctx.obj
+
+	view_data = vb(view).load()
+
+	nsent = int(nsent)
+
+	view_data["surrogate_id"] = [i for i in range(0,len(view_data[list(view_data.keys())[0]]))]
+
+	data = {}
+	data["surrogate_id"] = view_data["surrogate_id"]
+	data["text"] = view_data[col]
+
+	on_col = "text"
+
+	assert len(data.keys()) == 2 and on_col in data.keys()
+
+	sentencewise = []
+	df = pd.DataFrame.from_dict(data)
+	# get column names as indices for tuple access
+	print(df.columns.to_list())
+	i = df.columns.to_list().index(list(set(df.columns.to_list()) - {on_col})[0]) + 1
+	j = df.columns.to_list().index(on_col) + 1
+	# iterate through rows, if a text-cell contains several sentences => split into 2 rows.
+	count = 0
+	cycleBuffer = []
+	for row in df.itertuples():
+		for sentence in sent_tokenize(row[j]):
+			print(sentence)
+			cycleBuffer.append(sentence)
+			count += 1
+			if count % nsent == 0:
+				print("flushed")
+				sentencewise.append((row[i], " ".join(cycleBuffer)))
+				cycleBuffer = []
+				count = 0
+		if len(cycleBuffer) > 0:
+			print("final flush")
+			# flush the remaining before switching to new row
+			sentencewise.append((row[i], " ".join(cycleBuffer)))
+			cycleBuffer = []
+			count = 0
+
+	# return the dict
+	data = pd.DataFrame(sentencewise, columns=[df.columns.to_list()[i - 1], on_col]).to_dict(orient="list")
+
+	# remove the relevant previous cols if no newcolname
+	if not newcolname:
+		view_data.pop(col)
+		data[col] = data.pop("text")
+	else:
+		data[newcolname] = data.pop("text")
+
+	ret = vb.join_on(view_data, data, label="surrogate_id")
+
+	ret.pop("surrogate_id")
+
+	vb(view).save(ret)
+
+
+
+
 # add different sub entrypoints
 entrypoint.add_command(join)
 entrypoint.add_command(extract)
@@ -802,6 +879,7 @@ entrypoint.add_command(encoder)
 entrypoint.add_command(train)
 entrypoint.add_command(validate)
 entrypoint.add_command(append)
+entrypoint.add_command(segment)
 
 if __name__ == "__main__":
 	entrypoint()
