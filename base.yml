@@ -1,7 +1,0 @@
-name: base
-channels:
-  - conda-forge
-dependencies:
-  - pytorch-cpu
-  - transformers
-  - sentence-transformers
