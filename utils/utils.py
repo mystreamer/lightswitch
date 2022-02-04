@@ -42,7 +42,7 @@ class CTFIDFVectorizer(TfidfTransformer):
 		nltk.download('stopwords')
 		count_vectorizer = CountVectorizer(stop_words=stopwords.words(stopword_lang)).fit(text_per_class[text_column_name])
 		count = count_vectorizer.transform(text_per_class[text_column_name])
-		words = count_vectorizer.get_feature_names()
+		words = count_vectorizer.get_feature_names_out()
 		ctfidf = self.fit_transform(count, n_samples=len(df)).toarray()
 		return ctfidf, count.toarray(), words, text_per_class.index.tolist()
 

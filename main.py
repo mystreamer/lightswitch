@@ -220,7 +220,7 @@ def ctfidf(ctx, includetf, ranks, lang, groupby, cols):
 
 
 @extract.command()
-@click.option("--lang", default="de", help="Language to use for stopword removal")
+@click.option("--lang", default="german", help="Language to use for stopword removal")
 @click.argument("groupby")
 @click.argument("cols")
 @click.pass_context
@@ -352,7 +352,7 @@ def sentiment(ctx, modelname):
 			sentencewise = []
 			df = pd.DataFrame.from_dict(data)
 			# get column names as indices for tuple access
-			print(df.columns.to_list())
+			# print(df.columns.to_list())
 			i = df.columns.to_list().index(list(set(df.columns.to_list()) - {on_col})[0]) + 1
 			j = df.columns.to_list().index(on_col) + 1
 			# iterate through rows, if a text-cell contains several sentences => split into 2 rows.
@@ -801,6 +801,15 @@ def column(ctx, newcolname, col):
 def segment(ctx, viewname):
 	"""Append a column to another view"""
 	ctx.obj = (viewname)
+	click.echo(viewname)
+
+@segment.command()
+@click.argument("viewname2")
+@click.pass_context
+def world(ctx, viewname2):
+	view = ctx.obj
+	click.echo(view)
+	click.echo(viewname2)
 
 
 @segment.command()
