@@ -1,7 +1,8 @@
 ![lightswitch-logo](logo.png)
 
 ## Lightswitch
-#### Tools for text.
+
+#### Tools for text
 
 <br>
 <br>

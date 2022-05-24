@@ -6,8 +6,9 @@ import unittest
 import pandas as pd
 from click.testing import CliRunner
 
-from main import ( extract, 
-                utils )
+from main import (extract,
+                  utils)
+
 
 class ExtractTest(unittest.TestCase):
 
@@ -29,35 +30,35 @@ class ExtractTest(unittest.TestCase):
 
     def test_kwic(self):
 
-        result = self.runner.invoke(extract, ['data', 
-            'newdata',
-            'kwic', 
-            'test_files/test_keywords.txt', 
-            'text'])
-
+        result = self.runner.invoke(extract, ['data',
+                                              'newdata',
+                                              'kwic',
+                                              'test_files/test_keywords.txt',
+                                              'text'])
 
         assert result.exit_code == 0
 
         d = pd.read_csv(self.newdata)
 
-        assert all([colname in d.columns.tolist() for colname in ['sent_ranges', 'context', 'keyword', 'parent_id']])
+        assert all([colname in d.columns.tolist() for colname in [
+                   'sent_ranges', 'context', 'keyword', 'parent_id']])
 
         assert len(d) == 31
 
-
     def test_ctfidf(self):
-        
+
         result = self.runner.invoke(extract, ['data',
-            'newdata',
-            'ctfidf',
-            'topic',
-            'text'])
+                                              'newdata',
+                                              'ctfidf',
+                                              'topic',
+                                              'text'])
 
         d = pd.read_csv(self.newdata)
 
         assert result.exit_code == 0
 
-        assert all([colname in d.columns.tolist() for colname in ['group_label', 'word', 'rank', 'tfidf']])
+        assert all([colname in d.columns.tolist()
+                   for colname in ['group_label', 'word', 'rank', 'tfidf']])
 
         assert len(d) == 1620
 
@@ -65,25 +66,25 @@ class ExtractTest(unittest.TestCase):
 
         assert float(d.loc[mask, ["tfidf"]]["tfidf"]) == 0.0878212304837641
 
-
     def test_similarity(self):
 
         result = self.runner.invoke(extract, ['data',
-            'newdata',
-            'similarity',
-            '--lang',
-            'english',
-            'topic',
-            'text'])
+                                              'newdata',
+                                              'similarity',
+                                              '--lang',
+                                              'english',
+                                              'topic',
+                                              'text'])
 
         d = pd.read_csv(self.newdata)
 
         assert result.exit_code == 0
 
         assert len(d) == 81
-        
-        assert d.loc[d["Unnamed: 0"] == "g2", '"booz allen"'].item() == 0.0009484395652787
-        
+
+        assert d.loc[d["Unnamed: 0"] == "g2",
+                     '"booz allen"'].item() == 0.0009484395652787
+
 
 class UtilsTest(unittest.TestCase):
 
@@ -94,19 +95,19 @@ class UtilsTest(unittest.TestCase):
     def setUp(self):
         self.data = "views/data.csv"
         shutil.copyfile("test_files/MOCK_DATA_SENTIMENT.csv", self.data)
-        
+
     # def tearDown(self):
     #     os.remove("views/data.csv")
     #     try:
     #         os.remove("views/newdata.csv")
     #     except Exception as e:
     #         pass
-    
+
     def test_sentiment(self):
 
         result = self.runner.invoke(utils, ['text',
-            'data',
-            'sentiment'])
+                                            'data',
+                                            'sentiment'])
 
         print(result.output)
 
@@ -120,10 +121,6 @@ class UtilsTest(unittest.TestCase):
 
     def test_matchcounter(self):
         pass
-
-
-
-
 
     # def test_segment(self):
 

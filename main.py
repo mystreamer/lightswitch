@@ -20,20 +20,20 @@ from utils.utils import KWIC, CTFIDFVectorizer, MatchCounter, Translator
 
 
 class PythonLiteralOption(click.Option):
-	def type_cast_value(self, ctx, value):
-		try:
-			return ast.literal_eval(value)
-		except Exception as e:
-			raise click.BadParameter(value)
+    def type_cast_value(self, ctx, value):
+        try:
+            return ast.literal_eval(value)
+        except Exception as e:
+            raise click.BadParameter(value)
 
 
 class ArgHolder(object):
-	pass
+    pass
 
 
 @click.group()
 def entrypoint():
-	pass
+    pass
 
 
 @click.command()
@@ -45,53 +45,56 @@ def entrypoint():
 @click.argument("rightcols")
 @click.pass_context
 def join(ctx, type, left, right, newview, leftcols, rightcols):
-	""" Join two files based on a single common attribute
+    """ Join two files based on a single common attribute
 
-	LEFT: The name of the first view
+    LEFT: The name of the first view
 
-	RIGHT: The name of the second view
+    RIGHT: The name of the second view
 
-	LEFTCOLS: Cols from the left to use the join on (left will always be the dominant naming)
+    LEFTCOLS: Cols from the left to use the join on (left will always be the dominant naming)
 
-	RIGHTCOLS: Cols from the right to use the join on
+    RIGHTCOLS: Cols from the right to use the join on
 
-	TYPE: e.g. inner
+    TYPE: e.g. inner
 
-	"""
+    """
 
-	data1 = vb(left).load()
+    data1 = vb(left).load()
 
-	data2 = vb(right).load()
+    data2 = vb(right).load()
 
-	leftcols = list([f.strip() for f in leftcols.split(",")])
+    leftcols = list([f.strip() for f in leftcols.split(",")])
 
-	rightcols = list([f.strip() for f in rightcols.split(",")])
+    rightcols = list([f.strip() for f in rightcols.split(",")])
 
-	assert len(leftcols) == len(rightcols), "The left and right column number must match"
+    assert len(leftcols) == len(
+        rightcols), "The left and right column number must match"
 
-	# normalize attributes of second columns
-	for attr1, attr2 in zip(leftcols, rightcols):
-		data2[attr1] = data2.pop(attr2)
+    # normalize attributes of second columns
+    for attr1, attr2 in zip(leftcols, rightcols):
+        data2[attr1] = data2.pop(attr2)
 
-	data = vb.join_on(data1, data2, leftcols, join_type=type)
+    data = vb.join_on(data1, data2, leftcols, join_type=type)
 
-	vb(newview).save(data)
+    vb(newview).save(data)
 
 # extracts from existing view
+
+
 @click.group()
 @click.argument("viewname")
 @click.argument("newview")
 @click.pass_context
 def extract(ctx, viewname, newview):
-	""" Extract text from an existing corpus
+    """ Extract text from an existing corpus
 
-	VIEWNAME : The name of the view which is used.
+    VIEWNAME : The name of the view which is used.
 
-	NEWVIEW : The name of the view which will be generated from the extract
+    NEWVIEW : The name of the view which will be generated from the extract
 
-	"""
-	# persist common attributes to click
-	ctx.obj = (viewname, newview)
+    """
+    # persist common attributes to click
+    ctx.obj = (viewname, newview)
 
 
 @extract.command()
@@ -103,94 +106,104 @@ def extract(ctx, viewname, newview):
 # TODO: add a window size argument
 @click.pass_context
 def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
-	""" Generates a set of matching keywords with surrounding contexts
+    """ Generates a set of matching keywords with surrounding contexts
 
-	KEYWORDS: Filepath to a file of keywords (can be a list of regex expressions)
+    KEYWORDS: Filepath to a file of keywords (can be a list of regex expressions)
 
-	COLS: If multiple columns are presented (comma separated in ""), they will be combined into a single text_dump
+    COLS: If multiple columns are presented (comma separated in ""), they will be combined into a single text_dump
 
-	"""
-	viewname, newview = ctx.obj
+    """
+    viewname, newview = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	data.update({"id": list(range(0, len(data[list(data.keys())[0]])))})
+    data.update({"id": list(range(0, len(data[list(data.keys())[0]])))})
 
-	keywords = KWIC().get_keywords(keywords)
+    keywords = KWIC().get_keywords(keywords)
 
-	# pre_validate
-	for regex in keywords:
-		try:
-			re.findall(re.compile(regex), "some stringg")
-		except Exception as e:
-			raise Exception(f"failed at regex {regex}")
+    # pre_validate
+    for regex in keywords:
+        try:
+            re.findall(re.compile(regex), "some stringg")
+        except Exception as e:
+            raise Exception(f"failed at regex {regex}")
 
-	cols = list([f.strip() for f in cols.split(",")])
+    cols = list([f.strip() for f in cols.split(",")])
 
-	if len(cols) > 1:
-		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
-		cols = ["combined_text"]
+    if len(cols) > 1:
+        data["combined_text"] = vb.aggregate_text_on_columns(
+            data, cols, delim=". ")
+        cols = ["combined_text"]
 
-	if masterexpr:
-		compiled_contexts = [(re.compile(r'%s' % (masterexpr.replace("<KEYWORD>", kw)), flags=re.IGNORECASE), kw) for kw in keywords]
-	else:
-		compiled_contexts = [(re.compile(r'%s' % (kw), flags=re.IGNORECASE), kw) for kw in keywords]
+    if masterexpr:
+        compiled_contexts = [(re.compile(r'%s' % (masterexpr.replace(
+            "<KEYWORD>", kw)), flags=re.IGNORECASE), kw) for kw in keywords]
+    else:
+        compiled_contexts = [
+            (re.compile(r'%s' % (kw), flags=re.IGNORECASE), kw) for kw in keywords]
 
-	matches = []
+    matches = []
 
-	print("Getting matches")
-	with tqdm(total=len(data[cols[0]]), leave=True, position=0):
-		for id, text in enumerate(tqdm(data[cols[0]], leave=True, position=0)):
-			matches += [{"match": list(re.finditer(expr[0], text)), "keyword": expr[1], "id": id} for expr in compiled_contexts]
+    print("Getting matches")
+    with tqdm(total=len(data[cols[0]]), leave=True, position=0):
+        for id, text in enumerate(tqdm(data[cols[0]], leave=True, position=0)):
+            matches += [{"match": list(re.finditer(expr[0], text)),
+                         "keyword": expr[1], "id": id} for expr in compiled_contexts]
 
-	# print(matches)
+    # print(matches)
 
-	matches = list(filter(lambda x: x["match"] if x["match"] != [] else False, matches))
+    matches = list(
+        filter(lambda x: x["match"] if x["match"] != [] else False, matches))
 
-	DS = {"id": [], "context": [], "keyword": []}
+    DS = {"id": [], "context": [], "keyword": []}
 
-	non_overlapping_set = set()
+    non_overlapping_set = set()
 
-	data["sent_ranges"] = KWIC().generate_sent_ranges(data, text_col=cols[0])
+    data["sent_ranges"] = KWIC().generate_sent_ranges(data, text_col=cols[0])
 
-	print("Mapping counts")
-	with tqdm(total=len(matches), leave=True, position=0):
-		for match in tqdm(matches, position=0, leave=True):
-			lst = []
-			match["match"] = [(m.start(), m.end()) for m in match["match"]]
-			for m in match["match"]:
-				try:
-					i = KWIC.get_index_of_range_list(data["sent_ranges"][match["id"]], m[0])
+    print("Mapping counts")
+    with tqdm(total=len(matches), leave=True, position=0):
+        for match in tqdm(matches, position=0, leave=True):
+            lst = []
+            match["match"] = [(m.start(), m.end()) for m in match["match"]]
+            for m in match["match"]:
+                try:
+                    i = KWIC.get_index_of_range_list(
+                        data["sent_ranges"][match["id"]], m[0])
 
-					if nooverlap:
-						if any([x in non_overlapping_set for x in [(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)]]):
-							continue
-						else:
-							non_overlapping_set = non_overlapping_set.union({(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)})
+                    if nooverlap:
+                        if any([x in non_overlapping_set for x in [(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)]]):
+                            continue
+                        else:
+                            non_overlapping_set = non_overlapping_set.union(
+                                {(match["id"], i), (match["id"], i + 1), (match["id"], i - 1)})
 
-					# TODO: Add window size variable
-					l_sent_start, l_sent_end = data["sent_ranges"][match["id"]][max(i - 1, 0)] if (i != 0) else (0, 0)
-					m_sent_start, m_sent_end = data["sent_ranges"][match["id"]][i]
-					r_sent_start, r_sent_end = data["sent_ranges"][match["id"]][i + 1:i + 2][0] if (data["sent_ranges"][match["id"]][i + 1:i + 2] != []) else (0, 0)
-					DS["context"].append(f'{data[cols[0]][match["id"]][l_sent_start:l_sent_end]} {data[cols[0]][match["id"]][m_sent_start:m_sent_end]} {data[cols[0]][match["id"]][r_sent_start:r_sent_end]}')
-					# if corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == "" or corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == " ":
-					# 	print(corpus_dict["article_text"][match["id"]][m[0]: m[1]].upper())
-					# 	print("____________")
-					# 	print(corpus_dict["article_text"][match["id"]])
-				except TypeError as e:
-					DS["context"].append("n.A.")
-				DS["id"].append(match["id"])
-				DS["keyword"].append(match["keyword"])
+                    # TODO: Add window size variable
+                    l_sent_start, l_sent_end = data["sent_ranges"][match["id"]][max(
+                        i - 1, 0)] if (i != 0) else (0, 0)
+                    m_sent_start, m_sent_end = data["sent_ranges"][match["id"]][i]
+                    r_sent_start, r_sent_end = data["sent_ranges"][match["id"]][i + 1:i + 2][0] if (
+                        data["sent_ranges"][match["id"]][i + 1:i + 2] != []) else (0, 0)
+                    DS["context"].append(
+                        f'{data[cols[0]][match["id"]][l_sent_start:l_sent_end]} {data[cols[0]][match["id"]][m_sent_start:m_sent_end]} {data[cols[0]][match["id"]][r_sent_start:r_sent_end]}')
+                    # if corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == "" or corpus_dict["article_text"][match["id"]][m[1]:m[1]+350] == " ":
+                    # 	print(corpus_dict["article_text"][match["id"]][m[0]: m[1]].upper())
+                    # 	print("____________")
+                    # 	print(corpus_dict["article_text"][match["id"]])
+                except TypeError as e:
+                    DS["context"].append("n.A.")
+                DS["id"].append(match["id"])
+                DS["keyword"].append(match["keyword"])
 
-			match.update({"kwic": lst})
+            match.update({"kwic": lst})
 
-	if keepdata:
-		joined_res = vb.join_on(data, DS, "id")
-		joined_res["parent_id"] = joined_res.pop("id")
-		vb(newview).save(joined_res)
-	else:
-		DS["parent_id"] = DS.pop("id")
-		vb(newview).save(DS)
+    if keepdata:
+        joined_res = vb.join_on(data, DS, "id")
+        joined_res["parent_id"] = joined_res.pop("id")
+        vb(newview).save(joined_res)
+    else:
+        DS["parent_id"] = DS.pop("id")
+        vb(newview).save(DS)
 
 
 @extract.command()
@@ -201,22 +214,24 @@ def kwic(ctx, nooverlap, keepdata, masterexpr, keywords, cols):
 @click.argument("cols")
 @click.pass_context
 def ctfidf(ctx, includetf, ranks, lang, groupby, cols):
-	viewname, newview = ctx.obj
+    viewname, newview = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	cols = list([f.strip() for f in cols.split(",")])
+    cols = list([f.strip() for f in cols.split(",")])
 
-	if len(cols) > 1:
-		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
-		cols = ["combined_text"]
+    if len(cols) > 1:
+        data["combined_text"] = vb.aggregate_text_on_columns(
+            data, cols, delim=". ")
+        cols = ["combined_text"]
 
-	records = CTFIDFVectorizer().get_most_prominent_words(data, groupby, cols[0], int(ranks), lang)
+    records = CTFIDFVectorizer().get_most_prominent_words(
+        data, groupby, cols[0], int(ranks), lang)
 
-	if not includetf:
-		records.pop("word_tf")
+    if not includetf:
+        records.pop("word_tf")
 
-	vb(newview).save(records)
+    vb(newview).save(records)
 
 
 @extract.command()
@@ -225,35 +240,38 @@ def ctfidf(ctx, includetf, ranks, lang, groupby, cols):
 @click.argument("cols")
 @click.pass_context
 def similarity(ctx, lang, groupby, cols):
-	viewname, newview = ctx.obj
-	
-	data = vb(viewname).load()
+    viewname, newview = ctx.obj
 
-	cols = list([f.strip() for f in cols.split(",")])
+    data = vb(viewname).load()
 
-	if len(cols) > 1:
-		data["combined_text"] = vb.aggregate_text_on_columns(data, cols, delim=". ")
-		cols = ["combined_text"]
+    cols = list([f.strip() for f in cols.split(",")])
 
-	records = CTFIDFVectorizer().get_similarity_matrix(data, groupby, cols[0], lang)
+    if len(cols) > 1:
+        data["combined_text"] = vb.aggregate_text_on_columns(
+            data, cols, delim=". ")
+        cols = ["combined_text"]
 
-	vb(newview).save(records)
+    records = CTFIDFVectorizer().get_similarity_matrix(
+        data, groupby, cols[0], lang)
+
+    vb(newview).save(records)
+
 
 @extract.command()
 @click.argument("lbd")
 @click.pass_context
 def filterby(ctx, lbd):
-	viewname, newview = ctx.obj
+    viewname, newview = ctx.obj
 
-	lbd = eval(lbd)
+    lbd = eval(lbd)
 
-	assert callable(lbd) and lbd.__name__ == "<lambda>"
+    assert callable(lbd) and lbd.__name__ == "<lambda>"
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	_, filtered = vb.filter(data, lbd)
+    _, filtered = vb.filter(data, lbd)
 
-	vb(newview).save(filtered)
+    vb(newview).save(filtered)
 
 
 @extract.command()
@@ -262,26 +280,27 @@ def filterby(ctx, lbd):
 @click.argument("cols")
 @click.pass_context
 def groupbycount(ctx, printoutput, horizontal, cols):
-	viewname, newview = ctx.obj
+    viewname, newview = ctx.obj
 
-	cols = list([f.strip() for f in cols.split(",")])
+    cols = list([f.strip() for f in cols.split(",")])
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	counts = vb.size_of_groups(data, cols, horizontal=True if horizontal else False)
+    counts = vb.size_of_groups(
+        data, cols, horizontal=True if horizontal else False)
 
-	if horizontal:
-		cols = ["cols"]
+    if horizontal:
+        cols = ["cols"]
 
-	str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
+    str_tmpl = "\t".join(["%s" for x in range(0, len(cols) + 1)])
 
-	if printoutput:
-		print(str_tmpl % tuple(x for x in (cols + ["count"])))
+    if printoutput:
+        print(str_tmpl % tuple(x for x in (cols + ["count"])))
 
-		for elems in zip(*tuple(counts[x] for x in cols), counts["count"]):
-			print(str_tmpl % elems)
+        for elems in zip(*tuple(counts[x] for x in cols), counts["count"]):
+            print(str_tmpl % elems)
 
-	vb(newview).save(counts)
+    vb(newview).save(counts)
 
 
 @extract.command()
@@ -290,182 +309,191 @@ def groupbycount(ctx, printoutput, horizontal, cols):
 @click.argument("condensecols")
 @click.pass_context
 def groupbycondense(ctx, delim, groupbycols, condensecols):
-	""" Condense text column(s) by grouping on col(s) """
-	viewname, newview = ctx.obj
+    """ Condense text column(s) by grouping on col(s) """
+    viewname, newview = ctx.obj
 
-	groupbycols = list([f.strip() for f in groupbycols.split(",")])
+    groupbycols = list([f.strip() for f in groupbycols.split(",")])
 
-	condensecols = list([f.strip() for f in condensecols.split(",")])
+    condensecols = list([f.strip() for f in condensecols.split(",")])
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	data = vb.aggregate_text_on_label(data, label_col=groupbycols, text_col=condensecols, delim=delim)
+    data = vb.aggregate_text_on_label(
+        data, label_col=groupbycols, text_col=condensecols, delim=delim)
 
-	vb(newview).save(data)
+    vb(newview).save(data)
 
 # insights from text
+
+
 @click.group()
 @click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
 @click.argument("feature")
 @click.argument("viewname")
 @click.pass_context
 def utils(ctx, newview, feature, viewname):
-	""" Perform a utility on a feature column to generate new features
+    """ Perform a utility on a feature column to generate new features
 
-	FEATURE : The name of the column the util will be performed on.
+    FEATURE : The name of the column the util will be performed on.
 
-	VIEWNAME : The name of the view which is used.
-	"""
-	# persist common attributes to click
-	ctx.obj = (newview, feature, viewname)
+    VIEWNAME : The name of the view which is used.
+    """
+    # persist common attributes to click
+    ctx.obj = (newview, feature, viewname)
+
 
 @utils.command()
 @click.option("--modelname", default=None, help="An optional model name. Default XLM-roberta (Cardiffnlp)")
 @click.pass_context
 def sentiment(ctx, modelname):
-	newview, feature, viewname = ctx.obj
+    newview, feature, viewname = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	modelname = "cardiffnlp/twitter-xlm-roberta-base-sentiment" if not modelname else modelname
+    modelname = "cardiffnlp/twitter-xlm-roberta-base-sentiment" if not modelname else modelname
 
-	sentimentanalyzer = pipeline("sentiment-analysis", model=modelname, tokenizer=modelname)
+    sentimentanalyzer = pipeline(
+        "sentiment-analysis", model=modelname, tokenizer=modelname)
 
-	NOTEBOOK_DIR = ""
-	NAME = viewname
+    NOTEBOOK_DIR = ""
+    NAME = viewname
 
-	# surrogate construction
-	data["surrogate_id"] = [i for i in range(0,len(data[list(data.keys())[0]]))]
+    # surrogate construction
+    data["surrogate_id"] = [i for i in range(
+        0, len(data[list(data.keys())[0]]))]
 
-	DS = {"text": data[feature]}
+    DS = {"text": data[feature]}
 
-	DS["comment_id"] = data["surrogate_id"]
+    DS["comment_id"] = data["surrogate_id"]
 
-	def split_sentencewise(data: dict, on_col: str = None):
-			""" Split all sentences in a cell
-			Takes:
-			 data: a dict with two keys: a list with texts, a list with ids
-			 on_col: specifies the column that contains the list of texts
-			"""
-			# assert that we are only dealing with Nx2 table. and that on_col is in keys
-			assert len(data.keys()) == 2 and on_col in data.keys()
-			sentencewise = []
-			df = pd.DataFrame.from_dict(data)
-			# get column names as indices for tuple access
-			# print(df.columns.to_list())
-			i = df.columns.to_list().index(list(set(df.columns.to_list()) - {on_col})[0]) + 1
-			j = df.columns.to_list().index(on_col) + 1
-			# iterate through rows, if a text-cell contains several sentences => split into 2 rows.
-			for row in df.itertuples():
-				for sentence in sent_tokenize(row[j]):
-					sentencewise.append((row[i], sentence))
-			# return the dict
-			return pd.DataFrame(sentencewise, columns=[df.columns.to_list()[i - 1], on_col]).to_dict(orient="list")
+    def split_sentencewise(data: dict, on_col: str = None):
+        """ Split all sentences in a cell
+        Takes:
+         data: a dict with two keys: a list with texts, a list with ids
+         on_col: specifies the column that contains the list of texts
+        """
+        # assert that we are only dealing with Nx2 table. and that on_col is in keys
+        assert len(data.keys()) == 2 and on_col in data.keys()
+        sentencewise = []
+        df = pd.DataFrame.from_dict(data)
+        # get column names as indices for tuple access
+        # print(df.columns.to_list())
+        i = df.columns.to_list().index(
+            list(set(df.columns.to_list()) - {on_col})[0]) + 1
+        j = df.columns.to_list().index(on_col) + 1
+        # iterate through rows, if a text-cell contains several sentences => split into 2 rows.
+        for row in df.itertuples():
+            for sentence in sent_tokenize(row[j]):
+                sentencewise.append((row[i], sentence))
+        # return the dict
+        return pd.DataFrame(sentencewise, columns=[df.columns.to_list()[i - 1], on_col]).to_dict(orient="list")
 
-	# split our actual data sentencewise (elongates table vertically)
-	split_series = split_sentencewise(DS, on_col = "text")
+    # split our actual data sentencewise (elongates table vertically)
+    split_series = split_sentencewise(DS, on_col="text")
 
-	# initialize new columns
-	scores = []
-	labels = []
+    # initialize new columns
+    scores = []
+    labels = []
 
-	# add sentiment score and labels as new columns
-	split_series.update({"score": list(scores), "label": list(labels)})
+    # add sentiment score and labels as new columns
+    split_series.update({"score": list(scores), "label": list(labels)})
 
-	# check if existing checkpoint exists
-	if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
-		# ask if checkpoint should be used to restore where took off
-		# res = input("Do you want to load from checkpoint? [y/N]")
-		if click.confirm("Do you want to load from old checkpoint?"):
-			with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'rb') as handle:
-				a = pickle.load(handle)
-				# assert precondition is met
-				if len(a["comment_id"]) != len(split_series["comment_id"]):
-					a["comment_id"] = split_series["comment_id"]
-					a["text"] = split_series["text"]
-				# balance scores and labels if unbalanced
-				while len(a["label"]) != len(a["score"]):
-					if len(a["label"]) < len(a["score"]):
-						a["label"].append("LABEL_0")
-					else:
-						a["score"].append(0.0)
-				split_series = a
-		else:
-			# delete the checkpoint if not wanted
-			try:
-				Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
-			except OSError as e:
-				print("Error: %s : %s" % (file_path, e.strerror))
+    # check if existing checkpoint exists
+    if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
+        # ask if checkpoint should be used to restore where took off
+        # res = input("Do you want to load from checkpoint? [y/N]")
+        if click.confirm("Do you want to load from old checkpoint?"):
+            with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'rb') as handle:
+                a = pickle.load(handle)
+                # assert precondition is met
+                if len(a["comment_id"]) != len(split_series["comment_id"]):
+                    a["comment_id"] = split_series["comment_id"]
+                    a["text"] = split_series["text"]
+                # balance scores and labels if unbalanced
+                while len(a["label"]) != len(a["score"]):
+                    if len(a["label"]) < len(a["score"]):
+                        a["label"].append("LABEL_0")
+                    else:
+                        a["score"].append(0.0)
+                split_series = a
+        else:
+            # delete the checkpoint if not wanted
+            try:
+                Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
+            except OSError as e:
+                print("Error: %s : %s" % (file_path, e.strerror))
 
-	# specify to save checkpoints every n-th iteration to save progress
-	checkpoint_every = 1000
-	# using counter variable here as tqdm doesn't operate well on enums
-	counter = 0
-	# assign a variable len_initial, for the case a checkpoint is loaded
-	len_initial = len(split_series["label"])
-	# fails variable to look how many times sentimentanalyzer failed
-	fails = 0
+    # specify to save checkpoints every n-th iteration to save progress
+    checkpoint_every = 1000
+    # using counter variable here as tqdm doesn't operate well on enums
+    counter = 0
+    # assign a variable len_initial, for the case a checkpoint is loaded
+    len_initial = len(split_series["label"])
+    # fails variable to look how many times sentimentanalyzer failed
+    fails = 0
 
-	# main loop
-	with tqdm(total=len(split_series["text"]), leave=True, position=0):
-		for sent in tqdm(split_series["text"], total=len(split_series["text"]), leave=True, position=0):
-			# skip processing if the data already exists as by the checkpoint
-			if len(split_series["text"][counter:len_initial]) > 0:
-				counter += 1
-				continue
-			# try to forwardpass the text into the sentiment analysis pipeline
-			try:
-				obj = sentimentanalyzer(sent)[0]
-				split_series["label"].append(obj["label"])
-				split_series["score"].append(obj["score"])
-			# if the analysis for a sentence fails (due to unclean data, just add as neutral)
-			except:
-				fails += 1
-				split_series["label"].append("LABEL_0")
-				split_series["score"].append(0.0)
-			# update counter
-			counter += 1
-			# save the already generated dict on every n-th iteration as specified with checkpoint_every
-			if counter % checkpoint_every == 0:
-				with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'wb') as handle:
-					pickle.dump(split_series, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # main loop
+    with tqdm(total=len(split_series["text"]), leave=True, position=0):
+        for sent in tqdm(split_series["text"], total=len(split_series["text"]), leave=True, position=0):
+            # skip processing if the data already exists as by the checkpoint
+            if len(split_series["text"][counter:len_initial]) > 0:
+                counter += 1
+                continue
+            # try to forwardpass the text into the sentiment analysis pipeline
+            try:
+                obj = sentimentanalyzer(sent)[0]
+                split_series["label"].append(obj["label"])
+                split_series["score"].append(obj["score"])
+            # if the analysis for a sentence fails (due to unclean data, just add as neutral)
+            except:
+                fails += 1
+                split_series["label"].append("LABEL_0")
+                split_series["score"].append(0.0)
+            # update counter
+            counter += 1
+            # save the already generated dict on every n-th iteration as specified with checkpoint_every
+            if counter % checkpoint_every == 0:
+                with open(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle", 'wb') as handle:
+                    pickle.dump(split_series, handle,
+                                protocol=pickle.HIGHEST_PROTOCOL)
 
-	for i, l in enumerate(split_series["label"]):
-		if l.upper() == "LABEL_0" or l.upper() == "NEGATIVE":
-			split_series["score"][i] *= -1
-		elif l.upper() == "LABEL_1" or l.upper() == "NEUTRAL":
-			split_series["score"][i] = None
+    for i, l in enumerate(split_series["label"]):
+        if l.upper() == "LABEL_0" or l.upper() == "NEGATIVE":
+            split_series["score"][i] *= -1
+        elif l.upper() == "LABEL_1" or l.upper() == "NEUTRAL":
+            split_series["score"][i] = None
 
-	# transform dict into dataframe
-	df_scores = pd.DataFrame.from_dict(split_series)
-	# print(df_scores)
+    # transform dict into dataframe
+    df_scores = pd.DataFrame.from_dict(split_series)
+    # print(df_scores)
 
-	# neutrals are skipped
-	df_scores = df_scores.groupby("comment_id", as_index=False)["score"].mean()
+    # neutrals are skipped
+    df_scores = df_scores.groupby("comment_id", as_index=False)["score"].mean()
 
-	#transform neutrals to 0
-	df_scores = df_scores.fillna(0.0)
+    # transform neutrals to 0
+    df_scores = df_scores.fillna(0.0)
 
-	# rename the columns
-	df_scores = df_scores.rename({'score': f"sentiment_score", "comment_id": "surrogate_id"}, axis=1)
+    # rename the columns
+    df_scores = df_scores.rename(
+        {'score': f"sentiment_score", "comment_id": "surrogate_id"}, axis=1)
 
-	datascores = df_scores.to_dict(orient="list")
+    datascores = df_scores.to_dict(orient="list")
 
+    # print(data)
 
-	# print(data)
+    data = vb.join_on(data, datascores, "surrogate_id")
 
-	data = vb.join_on(data, datascores, "surrogate_id")
+    data.pop("surrogate_id")
 
-	data.pop("surrogate_id")
+    vb(newview if newview else viewname).save(data)
 
-	vb(newview if newview else viewname).save(data)
+    # delete checkpoint after process ends
+    if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
+        try:
+            Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
+        except OSError as e:
+            print("Error: %s : %s" % (file_path, e.strerror))
 
-	# delete checkpoint after process ends
-	if Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").is_file():
-		try:
-			Path(NOTEBOOK_DIR + f"checkpoint_{NAME}.pickle").unlink()
-		except OSError as e:
-			print("Error: %s : %s" % (file_path, e.strerror))
 
 @utils.command()
 @click.option("--icol", default=None)
@@ -475,24 +503,28 @@ def sentiment(ctx, modelname):
 @click.argument("target")
 @click.pass_context
 def translate(ctx, icol, ival, newcol, source, target):
-	""" Translate texts """
-	newview, feature, viewname = ctx.obj
+    """ Translate texts """
+    newview, feature, viewname = ctx.obj
 
-	print(f"Translating all values where {icol} = {ival} on {feature} from {source} to {target}")
+    print(
+        f"Translating all values where {icol} = {ival} on {feature} from {source} to {target}")
 
-	t = Translator(auth_key="c1f62eb8-649b-514f-1f73-b3dc19e1c339:fx", source_lang=source, target_lang=target)
+    t = Translator(auth_key="c1f62eb8-649b-514f-1f73-b3dc19e1c339:fx",
+                   source_lang=source, target_lang=target)
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	col = newcol if newcol else feature
+    col = newcol if newcol else feature
 
-	with tqdm(total=len(data[feature]), leave=True, position=0):
-		if icol and ival:
-			data[col] = map(lambda x: t.translate_text(x[0]) if x[1] == ival else x[0], tqdm(zip(data[feature], data[icol]), position=0, leave=True, total=len(data[feature])))
-		else:
-			data[col] = map(lambda x: t.translate_text(x), tqdm(data[feature], position=0, leave=True))
+    with tqdm(total=len(data[feature]), leave=True, position=0):
+        if icol and ival:
+            data[col] = map(lambda x: t.translate_text(x[0]) if x[1] == ival else x[0], tqdm(
+                zip(data[feature], data[icol]), position=0, leave=True, total=len(data[feature])))
+        else:
+            data[col] = map(lambda x: t.translate_text(
+                x), tqdm(data[feature], position=0, leave=True))
 
-	vb(newview if newview else viewname).save(data)
+    vb(newview if newview else viewname).save(data)
 
 
 @utils.command()
@@ -502,84 +534,91 @@ def translate(ctx, icol, ival, newcol, source, target):
 @click.argument("keywordsfile")
 @click.pass_context
 def matchcounter(ctx, cscol, nestedcolorder, regexcol, keywordsfile):
-	""" Perform a matchcount operation """
-	newview, feature, viewname = ctx.obj
+    """ Perform a matchcount operation """
+    newview, feature, viewname = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	keywords = vb(keywordsfile).load(index_col=None)
+    keywords = vb(keywordsfile).load(index_col=None)
 
-	nestedcolorder = list([f.strip() for f in nestedcolorder.split(",")])
+    nestedcolorder = list([f.strip() for f in nestedcolorder.split(",")])
 
-	if not cscol:
-		keywords["case-sensitive"] = list([False for x in range(list(0, data.keys())[0])])
-	else:
-		keywords["case-sensitive"] = keywords.pop(cscol)
+    if not cscol:
+        keywords["case-sensitive"] = list(
+            [False for x in range(list(0, data.keys())[0])])
+    else:
+        keywords["case-sensitive"] = keywords.pop(cscol)
 
-	keywords["regex"] = keywords.pop(regexcol)
+    keywords["regex"] = keywords.pop(regexcol)
 
-	# pre_validate
-	for regex in keywords["regex"]:
-		try:
-			re.findall(re.compile(regex), "some stringg")
-		except Exception as e:
-			raise Exception(f"failed at regex {regex}")
+    # pre_validate
+    for regex in keywords["regex"]:
+        try:
+            re.findall(re.compile(regex), "some stringg")
+        except Exception as e:
+            raise Exception(f"failed at regex {regex}")
 
-	mc = MatchCounter()
+    mc = MatchCounter()
 
-	nest = mc.nestify(keywords, nestedcolorder, inner_cols=["regex", "case-sensitive"])
+    nest = mc.nestify(keywords, nestedcolorder, inner_cols=[
+                      "regex", "case-sensitive"])
 
-	# pre_validate
-	preval = mc.count_matches(copy.deepcopy(nest), "My String")
-	preval_flattened = mc.flatten_by(preval, "sum")
-	print(preval_flattened)
+    # pre_validate
+    preval = mc.count_matches(copy.deepcopy(nest), "My String")
+    preval_flattened = mc.flatten_by(preval, "sum")
+    print(preval_flattened)
 
+    with tqdm(total=len(data[feature]), leave=True, position=0):
+        prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text)
+                           for text in tqdm(data[feature], position=0, leave=True)])
 
-	with tqdm(total=len(data[feature]), leave=True, position=0):
-		prepared_ds = list([mc.count_matches(copy.deepcopy(nest), text) for text in tqdm(data[feature], position=0, leave=True)])
+    print("Flattening:")
+    with tqdm(total=len(prepared_ds), leave=True, position=0):
+        match_records = list([mc.flatten_by(ds, "sum")
+                             for ds in tqdm(prepared_ds, position=0, leave=True)])
 
-	print("Flattening:")
-	with tqdm(total=len(prepared_ds), leave=True, position=0):
-		match_records = list([mc.flatten_by(ds, "sum") for ds in tqdm(prepared_ds, position=0, leave=True)])
+    tbl = pd.DataFrame.from_dict(match_records).to_dict(orient="list")
 
-	tbl = pd.DataFrame.from_dict(match_records).to_dict(orient="list")
+    for word in copy.deepcopy(list(tbl.keys())):
+        data[word] = tbl.pop(word)
 
-	for word in copy.deepcopy(list(tbl.keys())):
-		data[word] = tbl.pop(word)
-
-	vb(newview if newview else viewname).save(data)
+    vb(newview if newview else viewname).save(data)
 
 # TODO: add fine tuning parameters
+
+
 @utils.command()
 @click.option("--includep", is_flag=True, help="Raise flag to include probability scores.")
 @click.option("--clusterlb", default=15, help="min_cluster_size (HDB) (how small should the clusters be minimally?)")
 @click.option("--samplelb", default=6, help="min_samples (how conservative should the clustering be?) (larger, more conservative)")
 @click.pass_context
 def hdbscan(ctx, includep, clusterlb, samplelb):
-	""" Perform hdbscan on a desired text-vector representation """
-	newview, feature, viewname = ctx.obj
+    """ Perform hdbscan on a desired text-vector representation """
+    newview, feature, viewname = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	data[feature] = vb.unstringify(data[feature])
+    data[feature] = vb.unstringify(data[feature])
 
-	clustered = hdb.HDBSCAN(min_cluster_size=int(clusterlb), prediction_data=True, min_samples=int(samplelb)).fit(data[feature])
+    clustered = hdb.HDBSCAN(min_cluster_size=int(
+        clusterlb), prediction_data=True, min_samples=int(samplelb)).fit(data[feature])
 
-	data['hdbscan'] = clustered.labels_
+    data['hdbscan'] = clustered.labels_
 
-	if includep:
-		data['hdbscan_p'] = clustered.probabilities_
+    if includep:
+        data['hdbscan_p'] = clustered.probabilities_
 
-	print(f"In total {len(set(clustered.labels_))} clusters have been generated.")
+    print(
+        f"In total {len(set(clustered.labels_))} clusters have been generated.")
 
-	sog = vb.size_of_groups(data, on="hdbscan")
+    sog = vb.size_of_groups(data, on="hdbscan")
 
-	print("clusterID\tcount")
+    print("clusterID\tcount")
 
-	for x, y in zip(sog["hdbscan"], sog["count"]):
-		print(f"{str(x)}\t{str(y)}")
+    for x, y in zip(sog["hdbscan"], sog["count"]):
+        print(f"{str(x)}\t{str(y)}")
 
-	vb(newview if newview else viewname).save(data)
+    vb(newview if newview else viewname).save(data)
 
 
 @utils.command()
@@ -589,20 +628,23 @@ def hdbscan(ctx, includep, clusterlb, samplelb):
 @click.option("--dist",  default=0.1, help="UMAP (larger value: allow for broader topological structure / less clumps)")
 @click.pass_context
 def umap(ctx, components, neighbors, seed, dist):
-	""" Perform umap on a desired text-vector representation """
-	newview, feature, viewname = ctx.obj
+    """ Perform umap on a desired text-vector representation """
+    newview, feature, viewname = ctx.obj
 
-	data = vb(viewname).load()
+    data = vb(viewname).load()
 
-	data[feature] = vb.unstringify(data[feature])
+    data[feature] = vb.unstringify(data[feature])
 
-	reduced = mp.UMAP(n_components=int(components), n_neighbors=int(neighbors), random_state=int(seed), min_dist=float(dist))
+    reduced = mp.UMAP(n_components=int(components), n_neighbors=int(
+        neighbors), random_state=int(seed), min_dist=float(dist))
 
-	data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
+    data['umap'] = vb.stringify(reduced.fit_transform(data[feature]).tolist())
 
-	vb(newview if newview else viewname).save(data)
+    vb(newview if newview else viewname).save(data)
 
 # encode text into vector representations
+
+
 @click.group()
 @click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
 @click.option("--filepath", default=None, help="Specify a filepath if a view doesn't exist yet")
@@ -610,15 +652,15 @@ def umap(ctx, components, neighbors, seed, dist):
 @click.argument("viewname")
 @click.pass_context
 def encoder(ctx, newview, filepath, textcol, viewname):
-	""" Encoders for encoding natural language text into vector-representation
+    """ Encoders for encoding natural language text into vector-representation
 
-	FILEPATH : Filepath to a file wanting to be loaded.
+    FILEPATH : Filepath to a file wanting to be loaded.
 
-	TEXTCOL : The name of the csv column that holds text.
+    TEXTCOL : The name of the csv column that holds text.
 
-	VIEWNAME : The name of the view, to be created if from filebath, or to be used.
-	"""
-	ctx.obj = (newview, filepath, textcol, viewname)
+    VIEWNAME : The name of the view, to be created if from filebath, or to be used.
+    """
+    ctx.obj = (newview, filepath, textcol, viewname)
 
 
 @encoder.command()
@@ -628,27 +670,33 @@ def encoder(ctx, newview, filepath, textcol, viewname):
 @click.option("--clip", default=None, help="Optional clipping parameter")
 @click.pass_context
 def sbert(ctx, modelname, multiprocessing, chunksize, clip):
-	newview, filepath, textcol, viewname = ctx.obj
+    newview, filepath, textcol, viewname = ctx.obj
 
-	if not newview and clip:
-		click.confirm('Clip is active, without a new viewname. This may overwrite your current view. Continue?', abort=True)
+    if not newview and clip:
+        click.confirm(
+            'Clip is active, without a new viewname. This may overwrite your current view. Continue?', abort=True)
 
-	data = vb(viewname).load(filepath if filepath else None, clip=int(clip) if clip else None)
+    data = vb(viewname).load(filepath if filepath else None,
+                             clip=int(clip) if clip else None)
 
-	enc = SBERTEncoder('T-Systems-onsite/cross-en-de-roberta-sentence-transformer' if not modelname else modelname)
+    enc = SBERTEncoder(
+        'T-Systems-onsite/cross-en-de-roberta-sentence-transformer' if not modelname else modelname)
 
-	if multiprocessing:
-		embeds = enc.encode_multiprocessed(data[textcol], chunk_size=int(chunksize) if chunksize else None)
-		data['sbert'] = embeds
-	else:
-		embeds = enc.encode(data[textcol])
-		data['sbert'] = vb.stringify(map(lambda x: x.tolist(), embeds))
+    if multiprocessing:
+        embeds = enc.encode_multiprocessed(
+            data[textcol], chunk_size=int(chunksize) if chunksize else None)
+        data['sbert'] = embeds
+    else:
+        embeds = enc.encode(data[textcol])
+        data['sbert'] = vb.stringify(map(lambda x: x.tolist(), embeds))
 
-	vb(newview if newview else viewname).save(data)
+    vb(newview if newview else viewname).save(data)
 
 # multilabel vs. multiclass
 # TODO: specify featureset (columns)
 # TODO: specify label (if new, add new... if old, specify a NULL value)
+
+
 @click.command()
 @click.option("--newview", default=None, help="Name of the new view, else column is appended / or view overwritten.")
 @click.option("--annotatorfile", default="oracle.csv", help="Choose the file which will query you for annotation")
@@ -662,114 +710,122 @@ def sbert(ctx, modelname, multiprocessing, chunksize, clip):
 @click.argument("label")
 @click.argument("viewname")
 def train(newview, annotatorfile, nsuggest, learnername, multilabel, binarize, features, label, viewname):
-	""" Initiate a training process on a chosen view.
+    """ Initiate a training process on a chosen view.
 
-	FEATURES: comma separated feature names / columns of the views (will be combined)
+    FEATURES: comma separated feature names / columns of the views (will be combined)
 
-	LABEL: the label the model will be trained on
-	"""
-	dc = vb(viewname).load()
+    LABEL: the label the model will be trained on
+    """
+    dc = vb(viewname).load()
 
-	assert multilabel == binarize, "Non binarized, multilabel currently not supported."
+    assert multilabel == binarize, "Non binarized, multilabel currently not supported."
 
-	feature_cols = list([f.strip() for f in features.split(",")])
+    feature_cols = list([f.strip() for f in features.split(",")])
 
-	dc["sbert"] = vb.unstringify(dc["sbert"])
+    dc["sbert"] = vb.unstringify(dc["sbert"])
 
-	dc["umap"] = vb.unstringify(dc["umap"])
+    dc["umap"] = vb.unstringify(dc["umap"])
 
-	dc["feature_combination"] = vb.combine(*(dc[f] for f in feature_cols))
+    dc["feature_combination"] = vb.combine(*(dc[f] for f in feature_cols))
 
-	X = {}
+    X = {}
 
-	mapper_unl, unlabelled = vb.filter(dc, lambda x: x[label] is None)
+    mapper_unl, unlabelled = vb.filter(dc, lambda x: x[label] is None)
 
-	X["unlabelled"] = unlabelled["feature_combination"]
+    X["unlabelled"] = unlabelled["feature_combination"]
 
-	mapper_l, labelled = vb.filter(dc, lambda x: x[label] is not None)
+    mapper_l, labelled = vb.filter(dc, lambda x: x[label] is not None)
 
-	X["train"] = labelled["feature_combination"]
+    X["train"] = labelled["feature_combination"]
 
-	MLB = MultiLabelBinarizer()
+    MLB = MultiLabelBinarizer()
 
-	if multilabel:
-		print([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", str(l).lower())]))])
-		MLB.fit([list(set([f.strip() for l in labelled[label] for f in re.split("[,;]", str(l).lower())]))])
-		y = MLB.transform(list([list(map(lambda x: x.strip(), re.split("[,;]", str(e).lower()))) for e in labelled[label]]))
-	else:
-		# if there a multiple labels present under the nML setting, we just use the first
-		print([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", str(l).lower())[0]]]))])
-		MLB.fit([list(set([f.strip() for l in labelled[label] for f in [re.split("[,;]", str(l).lower())[0]]]))])
-		y = MLB.transform(list([list(map(lambda x: x.strip(), [re.split("[,;]", str(e).lower())[0]])) for e in labelled[label]]))
+    if multilabel:
+        print([list(set([f.strip() for l in labelled[label]
+              for f in re.split("[,;]", str(l).lower())]))])
+        MLB.fit([list(set([f.strip() for l in labelled[label]
+                for f in re.split("[,;]", str(l).lower())]))])
+        y = MLB.transform(list([list(map(lambda x: x.strip(), re.split(
+            "[,;]", str(e).lower()))) for e in labelled[label]]))
+    else:
+        # if there a multiple labels present under the nML setting, we just use the first
+        print([list(set([f.strip() for l in labelled[label]
+              for f in [re.split("[,;]", str(l).lower())[0]]]))])
+        MLB.fit([list(set([f.strip() for l in labelled[label]
+                for f in [re.split("[,;]", str(l).lower())[0]]]))])
+        y = MLB.transform(list([list(map(lambda x: x.strip(), [re.split(
+            "[,;]", str(e).lower())[0]])) for e in labelled[label]]))
 
-	learner = Learner(learner_name=learnername, n_suggest=nsuggest, X=X, y=y, multilabel=multilabel)
+    learner = Learner(learner_name=learnername,
+                      n_suggest=nsuggest, X=X, y=y, multilabel=multilabel)
 
-	predicts, probas = learner.get_predicts()
+    predicts, probas = learner.get_predicts()
 
-	rand_encounters = 0
+    rand_encounters = 0
 
-	# TODO: Wrap in function (dangerous var leak)
-	for i, x, z in zip(range(0, len(predicts)), predicts, probas):
-		if np.sum(x) == 0:
-			if np.sum(z) != 0:
-				x[np.argmax(z)] = 1
-				predicts[i] = x
-			else:
-				rand_encounters += 1
-				x[np.random.choice(range(0, len(x)))] = 1
-				predicts[i] = x
+    # TODO: Wrap in function (dangerous var leak)
+    for i, x, z in zip(range(0, len(predicts)), predicts, probas):
+        if np.sum(x) == 0:
+            if np.sum(z) != 0:
+                x[np.argmax(z)] = 1
+                predicts[i] = x
+            else:
+                rand_encounters += 1
+                x[np.random.choice(range(0, len(x)))] = 1
+                predicts[i] = x
 
-	print(f"Experienced {rand_encounters} random encounters.")
+    print(f"Experienced {rand_encounters} random encounters.")
 
-	if binarize:
-		for c in MLB.classes_.tolist():
-			dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
+    if binarize:
+        for c in MLB.classes_.tolist():
+            dc[c] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
 
-		for c, col_l, col_unl in zip(MLB.classes_.tolist(), np.array(y).T, np.array(predicts).T):
-			for i, x in enumerate(col_l.tolist()):
-				dc[c][mapper_l[i]] = x
-			for i, x in enumerate(col_unl.tolist()):
-				dc[c][mapper_unl[i]] = x
-	else:
-		dc["train"] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
+        for c, col_l, col_unl in zip(MLB.classes_.tolist(), np.array(y).T, np.array(predicts).T):
+            for i, x in enumerate(col_l.tolist()):
+                dc[c][mapper_l[i]] = x
+            for i, x in enumerate(col_unl.tolist()):
+                dc[c][mapper_unl[i]] = x
+    else:
+        dc["train"] = list([0 for i in range(0, len(dc[list(dc.keys())[0]]))])
 
-		ivt_l = MLB.inverse_transform(y)
-		for i, row_l in enumerate(ivt_l):
-			dc["train"][mapper_l[i]] = row_l[0]
+        ivt_l = MLB.inverse_transform(y)
+        for i, row_l in enumerate(ivt_l):
+            dc["train"][mapper_l[i]] = row_l[0]
 
-		ivt_unl = MLB.inverse_transform(np.array(predicts))
-		for i, row_unl in enumerate(ivt_unl):
-			dc["train"][mapper_unl[i]] = row_unl[0]
+        ivt_unl = MLB.inverse_transform(np.array(predicts))
+        for i, row_unl in enumerate(ivt_unl):
+            dc["train"][mapper_unl[i]] = row_unl[0]
 
-	dc["sbert"] = vb.stringify(dc["sbert"])
+    dc["sbert"] = vb.stringify(dc["sbert"])
 
-	dc["umap"] = vb.stringify(dc["umap"])
+    dc["umap"] = vb.stringify(dc["umap"])
 
-	dc.pop("feature_combination")
+    dc.pop("feature_combination")
 
-	vb(newview if newview else viewname).save(dc)
-	# qs = learner.get_queryset()
-
+    vb(newview if newview else viewname).save(dc)
+    # qs = learner.get_queryset()
 
 
 # multilabel vs. multiclass
 @click.group()
 def validate():
-	""" Validate your sklearn model using features and a label
+    """ Validate your sklearn model using features and a label
 
-	FEATURES : comma separated feature names / columns (will be combined).
+    FEATURES : comma separated feature names / columns (will be combined).
 
-	LABEL : the label the model will be validated on.
-	"""
-	pass
+    LABEL : the label the model will be validated on.
+    """
+    pass
+
 
 @click.group()
 @click.argument("view1")
 @click.argument("view2")
 @click.pass_context
 def append(ctx, view1, view2):
-	"""Append a column to another view"""
-	ctx.obj = (view1, view2)
+    """Append a column to another view"""
+    ctx.obj = (view1, view2)
+
 
 @append.command()
 @click.option("--newcolname", default=None, help="Should the column be renamed before being appended?")
@@ -777,39 +833,42 @@ def append(ctx, view1, view2):
 # TODO: add a window size argument
 @click.pass_context
 def column(ctx, newcolname, col):
-	""" Append column from view1 to view 2 """
-	view1, view2 = ctx.obj
+    """ Append column from view1 to view 2 """
+    view1, view2 = ctx.obj
 
-	data1 = vb(view1).load()
-	data2 = vb(view2).load()
+    data1 = vb(view1).load()
+    data2 = vb(view2).load()
 
-	assert len(data1[list(data1.keys())[0]]) == len(data2[list(data2.keys())[0]]), "Table length must be equal."
+    assert len(data1[list(data1.keys())[0]]) == len(
+        data2[list(data2.keys())[0]]), "Table length must be equal."
 
-	newcolname = newcolname if newcolname else col
+    newcolname = newcolname if newcolname else col
 
-	if newcolname in data2.keys():
-		click.confirm('You are about to overwrite an initial column from view2. Continue?', abort=True)
+    if newcolname in data2.keys():
+        click.confirm(
+            'You are about to overwrite an initial column from view2. Continue?', abort=True)
 
-	data2[newcolname] = data1[col]
+    data2[newcolname] = data1[col]
 
-	vb(view2).save(data2)
+    vb(view2).save(data2)
 
 
 @click.group()
 @click.argument("viewname")
 @click.pass_context
 def segment(ctx, viewname):
-	"""Append a column to another view"""
-	ctx.obj = (viewname)
-	click.echo(viewname)
+    """Append a column to another view"""
+    ctx.obj = (viewname)
+    click.echo(viewname)
+
 
 @segment.command()
 @click.argument("viewname2")
 @click.pass_context
 def world(ctx, viewname2):
-	view = ctx.obj
-	click.echo(view)
-	click.echo(viewname2)
+    view = ctx.obj
+    click.echo(view)
+    click.echo(viewname2)
 
 
 @segment.command()
@@ -818,66 +877,67 @@ def world(ctx, viewname2):
 @click.option("--nsent", default=8, help="Into how many sentences should the text per column be expanded?")
 @click.pass_context
 def sentencewise(ctx, col, newcolname, nsent):
-	""" Given a table with a column of large texts per cells, split this into n-sentences (elongates the table) """
-	view = ctx.obj
+    """ Given a table with a column of large texts per cells, split this into n-sentences (elongates the table) """
+    view = ctx.obj
 
-	view_data = vb(view).load()
+    view_data = vb(view).load()
 
-	nsent = int(nsent)
+    nsent = int(nsent)
 
-	view_data["surrogate_id"] = [i for i in range(0,len(view_data[list(view_data.keys())[0]]))]
+    view_data["surrogate_id"] = [i for i in range(
+        0, len(view_data[list(view_data.keys())[0]]))]
 
-	data = {}
-	data["surrogate_id"] = view_data["surrogate_id"]
-	data["text"] = view_data[col]
+    data = {}
+    data["surrogate_id"] = view_data["surrogate_id"]
+    data["text"] = view_data[col]
 
-	on_col = "text"
+    on_col = "text"
 
-	assert len(data.keys()) == 2 and on_col in data.keys()
+    assert len(data.keys()) == 2 and on_col in data.keys()
 
-	sentencewise = []
-	df = pd.DataFrame.from_dict(data)
-	# get column names as indices for tuple access
-	print(df.columns.to_list())
-	i = df.columns.to_list().index(list(set(df.columns.to_list()) - {on_col})[0]) + 1
-	j = df.columns.to_list().index(on_col) + 1
-	# iterate through rows, if a text-cell contains several sentences => split into 2 rows.
-	count = 0
-	cycleBuffer = []
-	for row in df.itertuples():
-		for sentence in sent_tokenize(row[j]):
-			# print(sentence)
-			cycleBuffer.append(sentence)
-			count += 1
-			if count % nsent == 0:
-				# print("flushed")
-				sentencewise.append((row[i], " ".join(cycleBuffer)))
-				cycleBuffer = []
-				count = 0
-		if len(cycleBuffer) > 0:
-			# print("final flush")
-			# flush the remaining before switching to new row
-			sentencewise.append((row[i], " ".join(cycleBuffer)))
-			cycleBuffer = []
-			count = 0
+    sentencewise = []
+    df = pd.DataFrame.from_dict(data)
+    # get column names as indices for tuple access
+    print(df.columns.to_list())
+    i = df.columns.to_list().index(
+        list(set(df.columns.to_list()) - {on_col})[0]) + 1
+    j = df.columns.to_list().index(on_col) + 1
+    # iterate through rows, if a text-cell contains several sentences => split into 2 rows.
+    count = 0
+    cycleBuffer = []
+    for row in df.itertuples():
+        for sentence in sent_tokenize(row[j]):
+            # print(sentence)
+            cycleBuffer.append(sentence)
+            count += 1
+            if count % nsent == 0:
+                # print("flushed")
+                sentencewise.append((row[i], " ".join(cycleBuffer)))
+                cycleBuffer = []
+                count = 0
+        if len(cycleBuffer) > 0:
+            # print("final flush")
+            # flush the remaining before switching to new row
+            sentencewise.append((row[i], " ".join(cycleBuffer)))
+            cycleBuffer = []
+            count = 0
 
-	# return the dict
-	data = pd.DataFrame(sentencewise, columns=[df.columns.to_list()[i - 1], on_col]).to_dict(orient="list")
+    # return the dict
+    data = pd.DataFrame(sentencewise, columns=[df.columns.to_list()[
+                        i - 1], on_col]).to_dict(orient="list")
 
-	# remove the relevant previous cols if no newcolname
-	if not newcolname:
-		view_data.pop(col)
-		data[col] = data.pop("text")
-	else:
-		data[newcolname] = data.pop("text")
+    # remove the relevant previous cols if no newcolname
+    if not newcolname:
+        view_data.pop(col)
+        data[col] = data.pop("text")
+    else:
+        data[newcolname] = data.pop("text")
 
-	ret = vb.join_on(view_data, data, label="surrogate_id")
+    ret = vb.join_on(view_data, data, label="surrogate_id")
 
-	ret.pop("surrogate_id")
+    ret.pop("surrogate_id")
 
-	vb(view).save(ret)
-
-
+    vb(view).save(ret)
 
 
 # add different sub entrypoints
@@ -891,4 +951,4 @@ entrypoint.add_command(append)
 entrypoint.add_command(segment)
 
 if __name__ == "__main__":
-	entrypoint()
+    entrypoint()
